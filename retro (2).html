@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RetroForge</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6f8;overflow:hidden;}
+    @keyframes dot{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+    input,select,button{font-family:inherit;}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="text/babel">
+
+// ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
+const SUPABASE_URL = "https://dzsrglsturkewnogiczq.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6c3JnbHN0dXJrZXdub2dpY3pxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyODU4MDIsImV4cCI6MjA4OTg2MTgwMn0.QbnPrKVkbbTJLd5XiZkfpb7SbROjgb4rBprihZhsxCk";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const {useState,useEffect,useRef,useCallback}=React;
+
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const SM_PASSWORD="sm-master-2026";
+const PROJECTS={
+  shield:{name:"Shield",password:"shield-retro",color:"#16a34a",emoji:"🛡️"},
+  vanguard:{name:"Vanguard",password:"vanguard-retro",color:"#ea580c",emoji:"⚔️"},
+  valhalla:{name:"Valhalla",password:"valhalla-retro",color:"#7c3aed",emoji:"🏔️"},
+};
+const DEF_COLS=[
+  {id:"went-well",label:"What went well?",color:"#22c55e"},
+  {id:"improve",label:"What didn't go well?",color:"#ef4444"},
+  {id:"kudos",label:"Kudos 🎉",color:"#a855f7"},
+];
+const AV=[
+  {bg:"#dbeafe",t:"#1e40af"},{bg:"#fce7f3",t:"#9d174d"},
+  {bg:"#dcfce7",t:"#166534"},{bg:"#fef3c7",t:"#92400e"},
+  {bg:"#ede9fe",t:"#5b21b6"},{bg:"#ffedd5",t:"#9a3412"},
+  {bg:"#cffafe",t:"#155e75"},{bg:"#fef9c3",t:"#713f12"},
+];
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+const hsh=s=>{let h=0;for(let i=0;i<s.length;i++)h=((h<<5)-h)+s.charCodeAt(i);return Math.abs(h);};
+const ini=n=>n.split(" ").map(w=>w[0]||"").join("").toUpperCase().slice(0,2);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2);
+
+function Av({name,size=28}){
+  const c=AV[hsh(name)%AV.length];
+  return <div style={{width:size,height:size,borderRadius:"50%",background:c.bg,color:c.t,display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*.36,fontWeight:700,flexShrink:0,border:"2px solid #fff",boxShadow:"0 1px 3px rgba(0,0,0,.12)"}}>{ini(name)}</div>;
+}
+function Spin(){return <span style={{display:"inline-flex",gap:3,alignItems:"center"}}>{[0,1,2].map(i=><span key={i} style={{width:5,height:5,borderRadius:"50%",background:"#0d9488",display:"inline-block",animation:"dot .8s infinite",animationDelay:`${i*.15}s`}}/>)}</span>;}
+function FullLoader({msg="Loading..."}){
+  return(
+    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"#f4f6f8",gap:16}}>
+      <Spin/>
+      <div style={{fontSize:14,color:"#64748b"}}>{msg}</div>
+    </div>
+  );
+}
+
+const B={display:"inline-flex",alignItems:"center",gap:5,padding:"6px 14px",borderRadius:7,fontSize:12,fontWeight:600,cursor:"pointer",border:"none"};
+const bB={...B,background:"#0ea5e9",color:"#fff"};
+const bT={...B,background:"#0d9488",color:"#fff"};
+const bG={...B,background:"transparent",color:"#1a202c",border:"1.5px solid #d1d5db"};
+const FI={width:"100%",border:"1.5px solid #e2e8f0",borderRadius:7,padding:"9px 12px",fontSize:13,color:"#1a202c",background:"#fff",marginBottom:10};
+const FL={fontSize:11,fontWeight:700,letterSpacing:".8px",textTransform:"uppercase",color:"#64748b",display:"block",marginBottom:5};
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+function Auth({onLogin}){
+  const [proj,setProj]=useState("shield");
+  const [pw,setPw]=useState("");
+  const [nm,setNm]=useState("");
+  const [err,setErr]=useState("");
+  function go(){
+    setErr("");
+    if(pw===SM_PASSWORD){onLogin({project:proj,role:"sm",name:nm||"SM"});return;}
+    if(pw===PROJECTS[proj].password){
+      if(!nm.trim()){setErr("Please enter your name.");return;}
+      onLogin({project:proj,role:"participant",name:nm.trim()});return;
+    }
+    setErr("Wrong password.");
+  }
+  return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24,background:"linear-gradient(135deg,#e0f2fe,#f0fdf4)"}}>
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:36,width:"100%",maxWidth:400,boxShadow:"0 4px 16px rgba(0,0,0,.1)"}}>
+        <div style={{fontSize:10,letterSpacing:3,textTransform:"uppercase",color:"#94a3b8",marginBottom:18}}>RetroForge · v6</div>
+        <div style={{fontSize:22,fontWeight:800,marginBottom:4}}>Sprint Retrospective</div>
+        <div style={{fontSize:13,color:"#64748b",marginBottom:22}}>Select your team and enter your access code</div>
+        <label style={FL}>Team</label>
+        <select style={{...FI,cursor:"pointer"}} value={proj} onChange={e=>setProj(e.target.value)}>
+          {Object.entries(PROJECTS).map(([k,v])=><option key={k} value={k}>{v.emoji} {v.name}</option>)}
+        </select>
+        <label style={FL}>Your Name</label>
+        <input style={FI} placeholder="e.g. Maria" value={nm} onChange={e=>setNm(e.target.value)}/>
+        <label style={FL}>Access Code</label>
+        <input style={FI} type="password" placeholder="••••••••" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()}/>
+        {err&&<div style={{color:"#dc2626",fontSize:12,marginBottom:8}}>{err}</div>}
+        <button style={{...bB,width:"100%",justifyContent:"center",padding:"10px 0",fontSize:14,marginTop:4}} onClick={go}>Enter →</button>
+        <div style={{marginTop:14,fontSize:11,color:"#94a3b8",lineHeight:1.9,background:"#f8fafc",borderRadius:8,padding:"10px 12px"}}>
+          SM: <code>sm-master-2026</code><br/>
+          Shield: <code>shield-retro</code> · Vanguard: <code>vanguard-retro</code> · Valhalla: <code>valhalla-retro</code>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+function Dashboard({onSelect}){
+  return(
+    <div style={{padding:"32px 28px",maxWidth:760,margin:"0 auto"}}>
+      <div style={{fontSize:24,fontWeight:800,marginBottom:4}}>Select a Team</div>
+      <div style={{fontSize:13,color:"#64748b",marginBottom:24}}>Choose a project to view retrospectives</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:14}}>
+        {Object.entries(PROJECTS).map(([k,v])=>(
+          <div key={k} style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:12,padding:20,cursor:"pointer",transition:"all .18s"}}
+            onClick={()=>onSelect(k)}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor="#0ea5e9";e.currentTarget.style.transform="translateY(-2px)";}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="";}}>
+            <div style={{height:4,borderRadius:4,background:v.color,marginBottom:14}}/>
+            <div style={{fontSize:22,marginBottom:8}}>{v.emoji}</div>
+            <div style={{fontSize:15,fontWeight:700}}>{v.name}</div>
+            <div style={{fontSize:12,color:"#64748b",marginTop:3}}>View retros →</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── RETRO LIST ───────────────────────────────────────────────────────────────
+function RetroList({user,projectKey,onSelect,onBack}){
+  const proj=PROJECTS[projectKey];
+  const [retros,setRetros]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [showCreate,setShowCreate]=useState(false);
+  const [form,setForm]=useState({name:"",votes:3,columns:DEF_COLS.map(c=>({...c}))});
+
+  useEffect(()=>{
+    loadRetros();
+  },[]);
+
+  async function loadRetros(){
+    setLoading(true);
+    const {data}=await sb.from("retros").select("*").eq("project_key",projectKey).order("created_at",{ascending:false});
+    setRetros(data||[]);
+    setLoading(false);
+  }
+
+  async function create(){
+    if(!form.name.trim())return;
+    const r={
+      id:uid(),
+      project_key:projectKey,
+      name:form.name.trim(),
+      votes_per_person:parseInt(form.votes)||3,
+      step:1,
+      columns:form.columns,
+      groups:[],
+      action_items:{},
+      ready_status:{},
+      user_votes:{},
+      group_votes:{},
+    };
+    const {error}=await sb.from("retros").insert(r);
+    if(!error){setShowCreate(false);onSelect(r.id);}
+    else alert("Error creating retro: "+error.message);
+  }
+
+  function upCol(i,f,v){setForm(x=>({...x,columns:x.columns.map((c,ci)=>ci===i?{...c,[f]:v}:c)}));}
+
+  if(loading)return <FullLoader msg="Loading retros..."/>;
+
+  return(
+    <div style={{padding:"32px 28px",maxWidth:760,margin:"0 auto"}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:22}}>
+        <div>
+          <button style={{...bG,padding:"4px 10px",fontSize:11,marginBottom:10}} onClick={onBack}>← Back</button>
+          <div style={{fontSize:20,fontWeight:800}}>{proj.emoji} {proj.name} — Retros</div>
+        </div>
+        {user.role==="sm"&&<button style={bB} onClick={()=>setShowCreate(true)}>+ New Retro</button>}
+      </div>
+      {retros.length===0&&<div style={{color:"#94a3b8",fontSize:13,padding:"20px 0"}}>{user.role==="sm"?"No retros yet. Create one above.":"No retros yet. Ask your SM to create one."}</div>}
+      {retros.map(r=>(
+        <div key={r.id} style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"13px 18px",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",transition:"border-color .15s"}}
+          onClick={()=>onSelect(r.id)}
+          onMouseEnter={e=>e.currentTarget.style.borderColor="#0ea5e9"}
+          onMouseLeave={e=>e.currentTarget.style.borderColor="#e2e8f0"}>
+          <div>
+            <div style={{fontSize:14,fontWeight:600}}>{r.name}</div>
+            <div style={{fontSize:11,color:"#64748b",marginTop:3}}>
+              {new Date(r.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})} · Step {r.step}/4 · {r.votes_per_person} votes/person
+            </div>
+          </div>
+          <span style={{color:"#94a3b8"}}>→</span>
+        </div>
+      ))}
+      {showCreate&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.35)",backdropFilter:"blur(4px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+          <div style={{background:"#fff",borderRadius:14,padding:26,width:"100%",maxWidth:460,boxShadow:"0 20px 60px rgba(0,0,0,.15)"}}>
+            <div style={{fontSize:17,fontWeight:800,marginBottom:18}}>New Retrospective</div>
+            <label style={FL}>Sprint Name</label>
+            <input style={FI} placeholder="e.g. Sprint 42 · March 2026" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} autoFocus/>
+            <label style={FL}>Votes per person</label>
+            <input style={FI} type="number" min={1} max={20} value={form.votes} onChange={e=>setForm(f=>({...f,votes:e.target.value}))}/>
+            <label style={FL}>Columns</label>
+            {form.columns.map((col,i)=>(
+              <div key={col.id} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                <input type="color" value={col.color} onChange={e=>upCol(i,"color",e.target.value)} style={{width:26,height:26,border:"none",borderRadius:6,cursor:"pointer",padding:2,flexShrink:0}}/>
+                <input style={{...FI,marginBottom:0,flex:1}} value={col.label} onChange={e=>upCol(i,"label",e.target.value)}/>
+              </div>
+            ))}
+            <div style={{display:"flex",gap:8,marginTop:14}}>
+              <button style={bB} onClick={create}>Create Retro</button>
+              <button style={bG} onClick={()=>setShowCreate(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── BOARD ────────────────────────────────────────────────────────────────────
+function Board({user,projectKey,retroId,onBack}){
+  const [retro,setRetro]=useState(null);
+  const [cards,setCards]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [saving,setSaving]=useState(false);
+  const [aiLoading,setAiLoading]=useState(false);
+  const [aiSug,setAiSug]=useState(null);
+  const [drafts,setDrafts]=useState({});
+  const [topicIdx,setTopicIdx]=useState(0);
+  const [actDraft,setActDraft]=useState("");
+  const [expanded,setExpanded]=useState({});
+  const dragCard=useRef(null);
+  const [dragOverCard,setDragOverCard]=useState(null);
+  const [dragOverGroup,setDragOverGroup]=useState(null);
+
+  // ── Load & subscribe ───────────────────────────────────────────────────────
+  useEffect(()=>{
+    loadAll();
+    // Subscribe to retro changes (step, groups, votes, etc.)
+    const retroSub=sb.channel(`retro-${retroId}`)
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"retros",filter:`id=eq.${retroId}`},
+        payload=>{setRetro(payload.new);})
+      .subscribe();
+    // Subscribe to cards changes
+    const cardsSub=sb.channel(`cards-${retroId}`)
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"cards",filter:`retro_id=eq.${retroId}`},
+        payload=>{setCards(prev=>{if(prev.find(c=>c.id===payload.new.id))return prev;return [...prev,payload.new];});})
+      .on("postgres_changes",{event:"DELETE",schema:"public",table:"cards",filter:`retro_id=eq.${retroId}`},
+        payload=>{setCards(prev=>prev.filter(c=>c.id!==payload.old.id));})
+      .subscribe();
+    return()=>{sb.removeChannel(retroSub);sb.removeChannel(cardsSub);};
+  },[retroId]);
+
+  async function loadAll(){
+    setLoading(true);
+    const [{data:rd},{data:cd}]=await Promise.all([
+      sb.from("retros").select("*").eq("id",retroId).single(),
+      sb.from("cards").select("*").eq("retro_id",retroId).order("created_at",{ascending:true}),
+    ]);
+    setRetro(rd||null);
+    setCards(cd||[]);
+    setLoading(false);
+  }
+
+  // ── Save retro (partial update) ────────────────────────────────────────────
+  async function saveRetro(updates){
+    setSaving(true);
+    const merged={...retro,...updates};
+    const {error}=await sb.from("retros").update(updates).eq("id",retroId);
+    if(!error)setRetro(merged);
+    setSaving(false);
+    return !error;
+  }
+
+  // ── Cards ──────────────────────────────────────────────────────────────────
+  async function addCard(colId){
+    const text=(drafts[colId]||"").trim();if(!text)return;
+    const card={id:uid(),retro_id:retroId,col_id:colId,text,author:user.name};
+    setDrafts(d=>({...d,[colId]:""}));
+    await sb.from("cards").insert(card);
+  }
+
+  // ── Ready ──────────────────────────────────────────────────────────────────
+  async function toggleReady(){
+    const rs={...(retro.ready_status||{})};
+    rs[user.name]=!rs[user.name];
+    await saveRetro({ready_status:rs});
+  }
+
+  // ── Drag & Drop (same column only) ────────────────────────────────────────
+  function onDragStart(e,card){dragCard.current=card;e.dataTransfer.effectAllowed="move";}
+  function onDragEnd(){dragCard.current=null;setDragOverCard(null);setDragOverGroup(null);}
+  function onCardDragOver(e,targetCard){
+    e.preventDefault();e.stopPropagation();
+    if(!dragCard.current||dragCard.current.id===targetCard.id)return;
+    if(dragCard.current.col_id!==targetCard.col_id)return;
+    setDragOverCard(targetCard.id);setDragOverGroup(null);
+  }
+  function onGroupDragOver(e,groupId){
+    e.preventDefault();e.stopPropagation();
+    if(!dragCard.current)return;
+    setDragOverGroup(groupId);setDragOverCard(null);
+  }
+  async function onCardDrop(e,targetCard){
+    e.preventDefault();e.stopPropagation();
+    setDragOverCard(null);setDragOverGroup(null);
+    const src=dragCard.current;dragCard.current=null;
+    if(!src||src.id===targetCard.id||src.col_id!==targetCard.col_id)return;
+    let groups=[...(retro.groups||[])];
+    const srcG=groups.find(g=>g.cardIds.includes(src.id));
+    const tgtG=groups.find(g=>g.cardIds.includes(targetCard.id));
+    if(srcG&&tgtG&&srcG.id===tgtG.id)return;
+    if(tgtG){
+      if(srcG)groups=groups.map(g=>g.id===srcG.id?{...g,cardIds:g.cardIds.filter(id=>id!==src.id)}:g);
+      groups=groups.map(g=>g.id===tgtG.id?{...g,cardIds:[...g.cardIds,src.id]}:g);
+    } else if(srcG){
+      groups=groups.map(g=>g.id===srcG.id?{...g,cardIds:[...g.cardIds,targetCard.id]}:g);
+    } else {
+      const ng={id:uid(),name:"New Group",cardIds:[src.id,targetCard.id]};
+      groups=[...groups,ng];
+      setExpanded(ex=>({...ex,[ng.id]:true}));
+    }
+    await saveRetro({groups:groups.filter(g=>g.cardIds.length>0)});
+  }
+  async function onGroupDrop(e,groupId){
+    e.preventDefault();e.stopPropagation();
+    setDragOverCard(null);setDragOverGroup(null);
+    const src=dragCard.current;dragCard.current=null;
+    if(!src)return;
+    let groups=[...(retro.groups||[])];
+    const srcG=groups.find(g=>g.cardIds.includes(src.id));
+    if(srcG&&srcG.id===groupId)return;
+    if(srcG)groups=groups.map(g=>g.id===srcG.id?{...g,cardIds:g.cardIds.filter(id=>id!==src.id)}:g);
+    groups=groups.map(g=>g.id===groupId?{...g,cardIds:[...g.cardIds,src.id]}:g);
+    await saveRetro({groups:groups.filter(g=>g.cardIds.length>0)});
+  }
+  async function ungroupCard(cardId){
+    const groups=(retro.groups||[]).map(g=>({...g,cardIds:g.cardIds.filter(id=>id!==cardId)})).filter(g=>g.cardIds.length>0);
+    await saveRetro({groups});
+  }
+
+  // ── AI Grouping ────────────────────────────────────────────────────────────
+  async function runGrouping(r){
+    setAiLoading(true);
+    await saveRetro({step:2});
+    const cs=cards.map(c=>({id:c.id,text:c.text}));
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:"You are an agile coach. Return ONLY valid JSON.",
+          messages:[{role:"user",content:`Group these retro cards into 3-6 thematic clusters.\nCards:${JSON.stringify(cs)}\nReturn ONLY JSON:{"groups":[{"name":"Group Name","cardIds":["id1"]}]}`}]})});
+      const d=await res.json();
+      const text=d.content?.[0]?.text||"";
+      const p=JSON.parse(text.replace(/```json|```/g,"").trim());
+      setAiSug(p.groups||[]);
+    }catch{setAiSug([]);}
+    setAiLoading(false);
+  }
+  async function acceptGroups(){
+    const groups=aiSug.map(g=>({...g,id:uid()}));
+    const ex={};groups.forEach(g=>{ex[g.id]=true;});setExpanded(ex);
+    await saveRetro({groups});setAiSug(null);
+  }
+
+  // ── Voting ─────────────────────────────────────────────────────────────────
+  const vUsed=()=>Object.values((retro?.user_votes||{})[user.name]||{}).reduce((a,b)=>a+b,0);
+  const vLeft=()=>((retro?.votes_per_person||3)-vUsed());
+  async function voteItem(id,delta){
+    const vl=vLeft();
+    const uv={...(retro.user_votes||{})};
+    const myV={...(uv[user.name]||{})};
+    const cur=myV[id]||0;
+    if(delta>0&&vl<=0)return;
+    myV[id]=Math.max(0,cur+delta);uv[user.name]=myV;
+    const gv={...(retro.group_votes||{})};
+    gv[id]=Object.values(uv).reduce((s,mv)=>s+(mv[id]||0),0);
+    await saveRetro({user_votes:uv,group_votes:gv});
+  }
+
+  // ── Topics (step 4) ────────────────────────────────────────────────────────
+  const allTopics=()=>{
+    if(!retro)return[];
+    const gv=retro.group_votes||{};
+    const grouped=new Set((retro.groups||[]).flatMap(g=>g.cardIds));
+    const items=[];
+    (retro.groups||[]).forEach(g=>{
+      const gc=cards.filter(c=>g.cardIds.includes(c.id));
+      items.push({type:"group",id:g.id,name:g.name,votes:gv[g.id]||0,cards:gc});
+    });
+    cards.filter(c=>!grouped.has(c.id)).forEach(c=>{
+      items.push({type:"card",id:c.id,name:c.text,votes:gv[c.id]||0,cards:[c]});
+    });
+    return items.sort((a,b)=>b.votes-a.votes);
+  };
+  async function addAction(){
+    if(!actDraft.trim())return;
+    const topics=allTopics();const t=topics[topicIdx];if(!t)return;
+    const ai2={...(retro.action_items||{})};
+    ai2[t.id]=[...(ai2[t.id]||[]),{id:uid(),text:actDraft.trim()}];
+    await saveRetro({action_items:ai2});setActDraft("");
+  }
+  async function removeAction(tid,itemId){
+    const ai2={...(retro.action_items||{})};
+    ai2[tid]=(ai2[tid]||[]).filter(x=>x.id!==itemId);
+    await saveRetro({action_items:ai2});
+  }
+
+  // ── Advance / Back ─────────────────────────────────────────────────────────
+  async function advance(){
+    if(!retro||retro.step>=5)return;
+    if(retro.step===1){await runGrouping(retro);return;}
+    await saveRetro({step:retro.step+1,ready_status:{}});
+  }
+  async function goBack(){
+    if(!retro||retro.step<=1)return;
+    await saveRetro({step:retro.step-1,ready_status:{}});
+  }
+
+  if(loading)return <FullLoader msg="Loading session..."/>;
+  if(!retro)return <div style={{padding:40,color:"#64748b"}}>Session not found.</div>;
+
+  const readyNames=Object.entries(retro.ready_status||{}).filter(([,v])=>v).map(([k])=>k);
+  const isReady=!!retro.ready_status?.[user.name];
+  const vl=vLeft();
+  const knownPeople=Array.from(new Set([user.name,...cards.map(c=>c.author)]));
+  const colColor=(colId)=>(retro.columns.find(c=>c.id===colId)||{color:"#94a3b8"}).color;
+  const LABELS=["","Share your thoughts.","Review & group cards.","Vote to prioritize.","Create action items.","Session complete!"];
+
+  // ── Card components ────────────────────────────────────────────────────────
+  const Card1=({card,col})=>{
+    const isMe=card.author===user.name;
+    const revealed=retro.step>=2;
+    return(
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 10px",display:"flex",alignItems:"flex-start",gap:8,boxShadow:"0 1px 2px rgba(0,0,0,.04)",marginBottom:6,animation:"fadeIn .18s ease"}}>
+        <div style={{width:4,borderRadius:4,background:col.color,alignSelf:"stretch",minHeight:28,flexShrink:0}}/>
+        <Av name={card.author} size={22}/>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,lineHeight:1.5,filter:(!isMe&&!revealed)?"blur(5px)":"none",userSelect:(!isMe&&!revealed)?"none":"auto",transition:"filter .4s"}}>{card.text}</div>
+          {(isMe||revealed)&&<div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>{card.author}</div>}
+        </div>
+      </div>
+    );
+  };
+
+  const Card2=({card,inGroup=false})=>{
+    const isOver=dragOverCard===card.id;
+    return(
+      <div draggable onDragStart={e=>onDragStart(e,card)} onDragEnd={onDragEnd}
+        onDragOver={e=>onCardDragOver(e,card)} onDrop={e=>onCardDrop(e,card)}
+        style={{background:isOver?"#e0f2fe":"#fff",border:`1.5px solid ${isOver?"#0ea5e9":"#e2e8f0"}`,borderRadius:8,padding:"8px 10px",display:"flex",alignItems:"flex-start",gap:8,boxShadow:"0 1px 2px rgba(0,0,0,.04)",marginBottom:6,cursor:"grab",transition:"all .12s",animation:"fadeIn .18s ease"}}>
+        <span style={{color:"#cbd5e1",fontSize:13,flexShrink:0,paddingTop:1}}>⠿</span>
+        <div style={{width:3,borderRadius:3,background:colColor(card.col_id),alignSelf:"stretch",minHeight:24,flexShrink:0}}/>
+        <Av name={card.author} size={20}/>
+        <div style={{flex:1,fontSize:13,lineHeight:1.4}}>{card.text}</div>
+        {inGroup&&<button title="Remove from group" onClick={()=>ungroupCard(card.id)}
+          style={{background:"none",border:"none",cursor:"pointer",color:"#cbd5e1",fontSize:14,flexShrink:0,padding:"0 2px"}}
+          onMouseEnter={e=>e.target.style.color="#ef4444"} onMouseLeave={e=>e.target.style.color="#cbd5e1"}>×</button>}
+      </div>
+    );
+  };
+
+  // ── Summary ────────────────────────────────────────────────────────────────
+  const Summary=()=>{
+    const topics=allTopics();
+    const allActions=[];
+    topics.forEach(t=>{((retro.action_items||{})[t.id]||[]).forEach(item=>{allActions.push({...item,topic:t});});});
+    return(
+      <div style={{padding:"32px 28px",maxWidth:800,margin:"0 auto",overflowY:"auto",height:"calc(100vh - 155px)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:28}}>
+          <div style={{fontSize:32}}>🎉</div>
+          <div>
+            <div style={{fontSize:22,fontWeight:800}}>Retro Complete!</div>
+            <div style={{fontSize:13,color:"#64748b",marginTop:2}}>{retro.name}</div>
+          </div>
+        </div>
+        {allActions.length===0?(
+          <div style={{background:"#f8fafc",borderRadius:12,padding:32,textAlign:"center",color:"#94a3b8"}}>
+            <div style={{fontSize:28,marginBottom:8}}>📋</div>
+            <div style={{fontSize:14}}>No action items were created.</div>
+          </div>
+        ):(
+          <>
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:"#94a3b8",marginBottom:14}}>Action Items — {allActions.length} total</div>
+            {allActions.map((action,i)=>{
+              const t=action.topic;const fc=t.cards[0];
+              return(
+                <div key={action.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"14px 18px",marginBottom:10,boxShadow:"0 1px 3px rgba(0,0,0,.05)",animation:"fadeIn .2s ease"}}>
+                  <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+                    <div style={{background:"#e0f2fe",color:"#0ea5e9",borderRadius:8,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,flexShrink:0}}>{i+1}</div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:14,fontWeight:700,color:"#0f172a",marginBottom:8}}>{action.text}</div>
+                      <div style={{background:"#f8fafc",borderRadius:7,padding:"8px 10px",display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{width:3,borderRadius:3,background:fc?colColor(fc.col_id):"#94a3b8",alignSelf:"stretch",minHeight:20,flexShrink:0}}/>
+                        {fc&&<Av name={fc.author} size={20}/>}
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:11,color:"#94a3b8",marginBottom:2}}>{t.type==="group"?"Group":"Ticket"} · 👍 {t.votes} vote{t.votes!==1?"s":""}</div>
+                          <div style={{fontSize:12,color:"#374151",fontWeight:500}}>{t.name}</div>
+                          {t.type==="group"&&t.cards.length>1&&(
+                            <div style={{display:"flex",gap:4,marginTop:6,flexWrap:"wrap"}}>
+                              {t.cards.map(c=>(
+                                <div key={c.id} style={{display:"flex",alignItems:"center",gap:4,background:"#fff",border:"1px solid #e2e8f0",borderRadius:6,padding:"2px 7px",fontSize:11}}>
+                                  <Av name={c.author} size={14}/><span style={{color:"#64748b"}}>{c.text.slice(0,30)}{c.text.length>30?"…":""}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{display:"flex",gap:12,marginTop:24}}>
+              {[
+                {label:"Action Items",value:allActions.length,color:"#0ea5e9"},
+                {label:"Topics covered",value:topics.filter(t=>((retro.action_items||{})[t.id]||[]).length>0).length,color:"#0d9488"},
+                {label:"Total votes",value:Object.values(retro.group_votes||{}).reduce((a,b)=>a+b,0),color:"#7c3aed"},
+              ].map(s=>(
+                <div key={s.label} style={{flex:1,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"14px 16px",textAlign:"center"}}>
+                  <div style={{fontSize:28,fontWeight:800,color:s.color}}>{s.value}</div>
+                  <div style={{fontSize:11,color:"#94a3b8",marginTop:4,fontWeight:600}}>{s.label.toUpperCase()}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100vh"}}>
+      {/* Topbar */}
+      <div style={{background:"#fff",borderBottom:"1px solid #e2e8f0",height:50,display:"flex",alignItems:"center",padding:"0 20px",gap:10,flexShrink:0,boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+        <button style={{...bG,padding:"4px 10px",fontSize:11}} onClick={onBack}>← Back</button>
+        <span style={{color:"#e2e8f0"}}>|</span>
+        <span style={{fontSize:14,fontWeight:800}}>RetroForge</span>
+        <span style={{color:"#e2e8f0"}}>|</span>
+        <span style={{fontSize:13,fontWeight:600,color:"#64748b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{retro.name}</span>
+        {saving&&<span style={{fontSize:11,color:"#94a3b8"}}>saving…</span>}
+        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
+          {user.role==="sm"&&<span style={{background:"#eef2ff",color:"#4338ca",border:"1px solid #c7d2fe",borderRadius:100,padding:"2px 9px",fontSize:11,fontWeight:700}}>SM</span>}
+          <Av name={user.name} size={26}/>
+          <span style={{fontSize:12,fontWeight:600}}>{user.name}</span>
+        </div>
+      </div>
+
+      {/* Color bar */}
+      <div style={{display:"flex",height:5,flexShrink:0}}>
+        {retro.columns.map(c=><div key={c.id} style={{flex:1,background:c.color}}/>)}
+      </div>
+
+      {/* Step header */}
+      <div style={{background:"#fff",borderBottom:"1px solid #e2e8f0",height:48,display:"flex",alignItems:"center",padding:"0 20px",gap:14,flexShrink:0}}>
+        <span style={{fontSize:13,fontWeight:700}}>
+          <strong>Step {Math.min(retro.step,4)} of 4:</strong>{" "}
+          <span style={{fontWeight:400,color:"#64748b"}}>{LABELS[retro.step]}</span>
+          {retro.step===3&&<span style={{color:"#dc2626",fontWeight:700,marginLeft:8}}>{vl} vote{vl!==1?"s":""} left</span>}
+        </span>
+        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
+          {retro.step<5&&<>
+            <span style={{fontSize:12,fontWeight:600,color:"#64748b"}}>Ready?</span>
+            <div style={{width:40,height:22,borderRadius:100,background:isReady?"#22c55e":"#e2e8f0",position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}} onClick={toggleReady}>
+              <div style={{position:"absolute",top:2,left:isReady?20:2,width:18,height:18,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,.2)",transition:"left .2s"}}/>
+            </div>
+          </>}
+          {retro.step>1&&retro.step<5&&user.role==="sm"&&<button style={bG} onClick={goBack}>‹ Back</button>}
+          {retro.step<4&&user.role==="sm"&&<button style={bT} onClick={advance} disabled={aiLoading||saving}>{aiLoading?<><Spin/> Working…</>:"Next ›"}</button>}
+          {retro.step===4&&user.role==="sm"&&<button style={bB} onClick={advance} disabled={saving}>Finish & See Summary →</button>}
+        </div>
+      </div>
+
+      {/* Main */}
+      <div style={{flex:1,display:"flex",overflow:"hidden"}}>
+        <div style={{flex:1,overflowX:"auto",overflowY:"auto"}}>
+
+          {/* STEP 1 */}
+          {retro.step===1&&(
+            <div style={{display:"flex",height:"100%"}}>
+              {retro.columns.map(col=>{
+                const colCards=cards.filter(c=>c.col_id===col.id);
+                return(
+                  <div key={col.id} style={{flex:1,borderRight:"1px solid #e2e8f0",display:"flex",flexDirection:"column",minWidth:240}}>
+                    <div style={{fontSize:16,fontWeight:700,textAlign:"center",padding:"14px 14px 8px"}}>{col.label}</div>
+                    <div style={{padding:"0 14px 8px"}}>
+                      <input style={{width:"100%",border:"none",borderBottom:"1.5px solid #e2e8f0",padding:"6px 0",fontSize:13,background:"transparent",color:"#1a202c"}}
+                        placeholder="+ Type ideas and hit enter"
+                        value={drafts[col.id]||""} onChange={e=>setDrafts(d=>({...d,[col.id]:e.target.value}))}
+                        onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addCard(col.id);}}}/>
+                    </div>
+                    <div style={{flex:1,padding:"4px 10px",overflowY:"auto"}}>
+                      {colCards.map(card=><Card1 key={card.id} card={card} col={col}/>)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* STEP 2 */}
+          {retro.step===2&&(
+            <div style={{display:"flex",height:"100%"}}>
+              {aiSug&&(
+                <div style={{position:"absolute",top:0,left:0,right:185,zIndex:10}}>
+                  <div style={{background:"#eef2ff",border:"1.5px solid #c7d2fe",borderRadius:10,padding:"12px 16px",margin:"10px 14px"}}>
+                    <div style={{fontSize:12,fontWeight:700,color:"#4338ca",marginBottom:10}}>✦ AI suggested {aiSug.length} groups</div>
+                    {aiSug.map((g,i)=>{
+                      const gc=cards.filter(c=>g.cardIds.includes(c.id));
+                      return(
+                        <div key={i} style={{background:"#fff",border:"1px solid #e0e7ff",borderRadius:8,padding:"9px 12px",marginBottom:7}}>
+                          <div style={{fontSize:13,fontWeight:700,marginBottom:5}}>🗂 {g.name}</div>
+                          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{gc.map(c=><span key={c.id} style={{background:"#f0f4ff",border:"1px solid #e0e7ff",borderRadius:6,padding:"2px 7px",fontSize:11,color:"#4338ca"}}>{c.text.slice(0,35)}{c.text.length>35?"…":""}</span>)}</div>
+                        </div>
+                      );
+                    })}
+                    <div style={{display:"flex",gap:8,marginTop:10}}>
+                      <button style={bT} onClick={acceptGroups}>✓ Accept Groups</button>
+                      <button style={bG} onClick={()=>setAiSug(null)}>Dismiss</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {retro.columns.map(col=>{
+                const freeCards=cards.filter(c=>c.col_id===col.id&&!(retro.groups||[]).some(g=>g.cardIds.includes(c.id)));
+                const colGroups=(retro.groups||[]).filter(g=>cards.some(c=>g.cardIds.includes(c.id)&&c.col_id===col.id));
+                return(
+                  <div key={col.id} style={{flex:1,borderRight:"1px solid #e2e8f0",display:"flex",flexDirection:"column",minWidth:260,overflowY:"auto"}}>
+                    <div style={{fontSize:16,fontWeight:700,textAlign:"center",padding:"14px 14px 8px"}}>{col.label}</div>
+                    <div style={{flex:1,padding:"4px 10px 16px"}}>
+                      <div style={{fontSize:10,color:"#94a3b8",marginBottom:8,fontWeight:600}}>DRAG CARDS ONTO EACH OTHER TO GROUP</div>
+                      {colGroups.map(g=>{
+                        const gc=cards.filter(c=>g.cardIds.includes(c.id)&&c.col_id===col.id);
+                        const isExp=expanded[g.id]!==false;
+                        const isOvG=dragOverGroup===g.id;
+                        return(
+                          <div key={g.id}
+                            onDragOver={e=>onGroupDragOver(e,g.id)}
+                            onDragLeave={()=>setDragOverGroup(null)}
+                            onDrop={e=>onGroupDrop(e,g.id)}
+                            style={{background:isOvG?"#e0f2fe":"#f8fafc",border:`1.5px solid ${isOvG?"#0ea5e9":"#e2e8f0"}`,borderRadius:9,marginBottom:10,transition:"all .12s"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderBottom:isExp?"1px solid #e2e8f0":"none"}}>
+                              <input style={{flex:1,border:"none",background:"transparent",fontSize:13,fontWeight:700,color:"#1a202c"}} value={g.name}
+                                onChange={e=>{const groups=retro.groups.map(x=>x.id===g.id?{...x,name:e.target.value}:x);saveRetro({groups});}}/>
+                              <span style={{fontSize:10,color:"#94a3b8",fontWeight:500}}>{gc.length}</span>
+                              <button style={{background:"none",border:"none",cursor:"pointer",color:"#94a3b8",fontSize:13}} onClick={()=>setExpanded(ex=>({...ex,[g.id]:!isExp}))}>{isExp?"▲":"▼"}</button>
+                            </div>
+                            {isExp&&<div style={{padding:"6px 8px"}}>
+                              {gc.map(card=><Card2 key={card.id} card={card} inGroup/>)}
+                              {gc.length===0&&<div style={{fontSize:11,color:"#94a3b8",textAlign:"center",padding:8}}>Drop cards here</div>}
+                            </div>}
+                          </div>
+                        );
+                      })}
+                      {freeCards.map(card=><Card2 key={card.id} card={card}/>)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* STEP 3 */}
+          {retro.step===3&&(
+            <div style={{display:"flex",height:"100%"}}>
+              {retro.columns.map(col=>{
+                const colG=(retro.groups||[]).filter(g=>cards.some(c=>g.cardIds.includes(c.id)&&c.col_id===col.id));
+                const freeC=cards.filter(c=>c.col_id===col.id&&!(retro.groups||[]).some(g=>g.cardIds.includes(c.id)));
+                return(
+                  <div key={col.id} style={{flex:1,borderRight:"1px solid #e2e8f0",display:"flex",flexDirection:"column",minWidth:240}}>
+                    <div style={{fontSize:16,fontWeight:700,textAlign:"center",padding:"14px 14px 10px"}}>{col.label}</div>
+                    <div style={{flex:1,padding:"0 10px",overflowY:"auto"}}>
+                      {freeC.map(card=>{
+                        const myV=((retro.user_votes||{})[user.name]||{})[card.id]||0;
+                        const totV=Object.values(retro.user_votes||{}).reduce((s,mv)=>s+(mv[card.id]||0),0);
+                        return(
+                          <div key={card.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px",marginBottom:7,display:"flex",alignItems:"center",gap:8,boxShadow:"0 1px 2px rgba(0,0,0,.04)"}}>
+                            <div style={{width:4,borderRadius:4,background:col.color,alignSelf:"stretch",minHeight:24,flexShrink:0}}/>
+                            <Av name={card.author} size={22}/>
+                            <div style={{flex:1,fontSize:13}}>{card.text}</div>
+                            <div style={{display:"flex",alignItems:"center",gap:3,flexShrink:0}}>
+                              <span style={{fontSize:11,fontWeight:700,color:"#64748b",minWidth:20,textAlign:"center"}}>{totV}</span>
+                              <button style={{background:"none",border:"none",cursor:vl>0?"pointer":"not-allowed",fontSize:20,opacity:vl>0?1:.3,lineHeight:1,padding:"2px"}} onClick={()=>voteItem(card.id,1)}>👍</button>
+                              <button style={{background:"none",border:"none",cursor:myV>0?"pointer":"not-allowed",fontSize:20,opacity:myV>0?1:.3,lineHeight:1,padding:"2px"}} onClick={()=>voteItem(card.id,-1)}>👎</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {colG.map(g=>{
+                        const gc=cards.filter(c=>g.cardIds.includes(c.id)&&c.col_id===col.id);
+                        const myV=((retro.user_votes||{})[user.name]||{})[g.id]||0;
+                        const totV=retro.group_votes?.[g.id]||0;
+                        const isExp=expanded[g.id]!==false;
+                        return(
+                          <div key={g.id} style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:8,marginBottom:9,overflow:"hidden"}}>
+                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderBottom:isExp?"1px solid #f1f5f9":"none"}}>
+                              <span style={{fontSize:13,fontWeight:700,flex:1}}>{g.name}</span>
+                              <div style={{display:"flex",alignItems:"center",gap:3,flexShrink:0}}>
+                                <span style={{fontSize:11,fontWeight:700,color:"#64748b",minWidth:20,textAlign:"center"}}>{totV}</span>
+                                <button style={{background:"none",border:"none",cursor:vl>0?"pointer":"not-allowed",fontSize:20,opacity:vl>0?1:.3,lineHeight:1,padding:"2px"}} onClick={()=>voteItem(g.id,1)}>👍</button>
+                                <button style={{background:"none",border:"none",cursor:myV>0?"pointer":"not-allowed",fontSize:20,opacity:myV>0?1:.3,lineHeight:1,padding:"2px"}} onClick={()=>voteItem(g.id,-1)}>👎</button>
+                                <button style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#94a3b8",marginLeft:2,padding:"2px 4px"}} onClick={()=>setExpanded(ex=>({...ex,[g.id]:!isExp}))}>{isExp?"▲":"▼"}</button>
+                              </div>
+                            </div>
+                            {isExp&&<div style={{padding:"6px 8px"}}>
+                              {gc.map(card=>(
+                                <div key={card.id} style={{background:"#f8fafc",borderRadius:6,padding:"6px 10px",marginBottom:5,display:"flex",alignItems:"center",gap:8,fontSize:12}}>
+                                  <div style={{width:3,borderRadius:3,background:col.color,alignSelf:"stretch",minHeight:18,flexShrink:0}}/>
+                                  <Av name={card.author} size={18}/><span>{card.text}</span>
+                                </div>
+                              ))}
+                            </div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* STEP 4 */}
+          {retro.step===4&&(()=>{
+            const topics=allTopics();
+            if(topics.length===0)return(
+              <div style={{padding:40,textAlign:"center",color:"#94a3b8"}}>
+                <div style={{fontSize:32,marginBottom:12}}>🗳️</div>
+                <div style={{fontSize:15,fontWeight:600,marginBottom:6}}>No cards found</div>
+              </div>
+            );
+            const t=topics[Math.min(topicIdx,topics.length-1)];
+            const items=(retro.action_items||{})[t.id]||[];
+            const fc=t.cards[0];
+            return(
+              <div style={{display:"flex",height:"100%"}}>
+                <div style={{width:300,flexShrink:0,borderRight:"1px solid #e2e8f0",padding:20,overflowY:"auto"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:16}}>
+                    <button style={{...bG,padding:"3px 10px",fontSize:11}} onClick={()=>setTopicIdx(i=>Math.max(0,i-1))} disabled={topicIdx===0}>‹</button>
+                    <span style={{fontSize:12,fontWeight:700,color:"#64748b",flex:1,textAlign:"center"}}>Topic ({Math.min(topicIdx,topics.length-1)+1}/{topics.length})</span>
+                    <button style={{...bG,padding:"3px 10px",fontSize:11}} onClick={()=>setTopicIdx(i=>Math.min(topics.length-1,i+1))} disabled={topicIdx>=topics.length-1}>›</button>
+                  </div>
+                  <div style={{fontSize:17,fontWeight:800,marginBottom:6,lineHeight:1.3}}>{t.name}</div>
+                  <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"#e0f2fe",color:"#0ea5e9",borderRadius:100,padding:"3px 12px",fontSize:12,fontWeight:700,marginBottom:16}}>
+                    👍 <strong>{t.votes}</strong> vote{t.votes!==1?"s":""}
+                  </div>
+                  {t.type==="group"&&t.cards.map(card=>(
+                    <div key={card.id} style={{background:"#f8fafc",borderRadius:7,padding:"7px 10px",marginBottom:6,display:"flex",alignItems:"center",gap:7,fontSize:12}}>
+                      <div style={{width:3,borderRadius:3,background:colColor(card.col_id),alignSelf:"stretch",minHeight:18,flexShrink:0}}/>
+                      <Av name={card.author} size={18}/><span>{card.text}</span>
+                    </div>
+                  ))}
+                  <div style={{marginTop:18,paddingTop:14,borderTop:"1px solid #e2e8f0"}}>
+                    <div style={{fontSize:10,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:"#94a3b8",marginBottom:10}}>All Topics</div>
+                    {topics.map((tp,i)=>(
+                      <div key={tp.id} onClick={()=>setTopicIdx(i)}
+                        style={{display:"flex",alignItems:"center",gap:7,padding:"5px 8px",borderRadius:7,marginBottom:3,cursor:"pointer",background:i===Math.min(topicIdx,topics.length-1)?"#e0f2fe":"transparent",transition:"background .12s"}}>
+                        <span style={{fontSize:11,fontWeight:700,color:"#0ea5e9",minWidth:22}}>👍{tp.votes}</span>
+                        <span style={{fontSize:12,color:"#374151",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:i===topicIdx?700:400}}>{tp.name}</span>
+                        <span style={{fontSize:10,color:"#94a3b8"}}>{((retro.action_items||{})[tp.id]||[]).length}✓</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",padding:"36px 24px",overflowY:"auto"}}>
+                  <div style={{fontSize:56,fontWeight:800,color:"#0ea5e9",lineHeight:1,marginBottom:4}}>{items.length}</div>
+                  <div style={{fontSize:15,fontWeight:600,color:"#64748b",marginBottom:6}}>Action Items</div>
+                  <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 14px",marginBottom:22,width:"100%",maxWidth:520,display:"flex",alignItems:"center",gap:10}}>
+                    {fc&&<><div style={{width:3,borderRadius:3,background:colColor(fc.col_id),alignSelf:"stretch",minHeight:20,flexShrink:0}}/><Av name={fc.author} size={22}/></>}
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:2}}>CURRENT TOPIC · 👍 {t.votes} VOTES</div>
+                      <div style={{fontSize:13,fontWeight:600,color:"#1a202c"}}>{t.name}</div>
+                    </div>
+                  </div>
+                  <input style={{width:"100%",maxWidth:520,border:"none",borderBottom:"1.5px solid #e2e8f0",padding:"9px 0",fontSize:14,color:"#1a202c",background:"transparent"}}
+                    placeholder="+ Type your idea here and hit enter"
+                    value={actDraft} onChange={e=>setActDraft(e.target.value)}
+                    onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addAction();}}}/>
+                  {items.map(item=>(
+                    <div key={item.id} style={{width:"100%",maxWidth:520,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"10px 14px",marginTop:9,display:"flex",alignItems:"flex-start",gap:10,boxShadow:"0 1px 2px rgba(0,0,0,.04)",animation:"fadeIn .2s ease"}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>{item.text}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          {fc&&<Av name={fc.author} size={16}/>}
+                          <span style={{fontSize:11,color:"#94a3b8"}}>from: {t.name.slice(0,40)}{t.name.length>40?"…":""} · 👍{t.votes}</span>
+                        </div>
+                      </div>
+                      <button style={{background:"none",border:"none",cursor:"pointer",color:"#cbd5e1",fontSize:16,padding:"0 4px",flexShrink:0}} onClick={()=>removeAction(t.id,item.id)}
+                        onMouseEnter={e=>e.target.style.color="#ef4444"} onMouseLeave={e=>e.target.style.color="#cbd5e1"}>×</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* STEP 5 */}
+          {retro.step===5&&<Summary/>}
+        </div>
+
+        {/* Sidebar */}
+        {retro.step<5&&(
+          <div style={{width:185,flexShrink:0,background:"#fff",borderLeft:"1px solid #e2e8f0",padding:"16px 14px",overflowY:"auto"}}>
+            <div style={{fontSize:10,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:"#94a3b8",marginBottom:12}}>Members Ready</div>
+            {knownPeople.map(name=>(
+              <div key={name} style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <Av name={name} size={28}/>
+                <div>
+                  <div style={{fontSize:12,fontWeight:500}}>{name}{name===user.name?" (you)":""}</div>
+                  {readyNames.includes(name)&&<div style={{fontSize:10,color:"#16a34a",fontWeight:700}}>✓ Ready</div>}
+                </div>
+              </div>
+            ))}
+            <div style={{marginTop:18,paddingTop:14,borderTop:"1px solid #f1f5f9"}}>
+              <div style={{fontSize:10,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:"#94a3b8",marginBottom:10}}>Need Help?</div>
+              <div style={{fontSize:12,color:"#0ea5e9",cursor:"pointer",marginBottom:6}}>Get support</div>
+              <div style={{fontSize:12,color:"#0ea5e9",cursor:"pointer"}}>View documentation</div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── ROOT ─────────────────────────────────────────────────────────────────────
+function App(){
+  const [user,setUser]=useState(null);
+  const [view,setView]=useState("dashboard");
+  const [selProject,setSelProject]=useState(null);
+  const [selRetro,setSelRetro]=useState(null);
+  if(!user)return <Auth onLogin={u=>{setUser(u);setSelProject(u.project);setView("retrolist");}}/>;
+  const proj=PROJECTS[selProject];
+  const Topbar=()=>(
+    <div style={{background:"#fff",borderBottom:"1px solid #e2e8f0",height:50,display:"flex",alignItems:"center",padding:"0 20px",gap:10,boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+      <span style={{fontSize:14,fontWeight:800}}>RetroForge</span>
+      {selProject&&<span style={{background:proj.color+"22",color:proj.color,border:`1px solid ${proj.color}44`,borderRadius:100,padding:"2px 9px",fontSize:11,fontWeight:700}}>{proj.emoji} {proj.name}</span>}
+      <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
+        <Av name={user.name} size={26}/>
+        <span style={{fontSize:12,fontWeight:600}}>{user.name}</span>
+        <button style={{...bG,padding:"4px 9px",fontSize:11}} onClick={()=>setUser(null)}>Logout</button>
+      </div>
+    </div>
+  );
+  if(view==="board"&&selRetro)return(
+    <div style={{height:"100vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      <Board user={user} projectKey={selProject} retroId={selRetro} onBack={()=>setView("retrolist")}/>
+    </div>
+  );
+  return(
+    <div style={{minHeight:"100vh",background:"#f4f6f8"}}>
+      <Topbar/>
+      {view==="dashboard"&&<Dashboard onSelect={k=>{setSelProject(k);setView("retrolist");}}/>}
+      {view==="retrolist"&&<RetroList user={user} projectKey={selProject} onSelect={id=>{setSelRetro(id);setView("board");}} onBack={()=>setView("dashboard")}/>}
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

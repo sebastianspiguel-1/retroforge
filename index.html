@@ -3,15 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RetroForge · Lexipol</title>
+  <title>Lexipol · Sprint Retrospective Tool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
   <style>
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6f8;overflow:hidden;}
+    body{font-family:'Barlow',system-ui,sans-serif;background:#f0f4f8;overflow:hidden;}
     @keyframes dot{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
-    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-    @keyframes reveal{from{filter:blur(6px);opacity:.6}to{filter:blur(0);opacity:1}}
-    input,select,button{font-family:inherit;}
-    button:hover{opacity:.88;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+    @keyframes revealCard{from{filter:blur(8px);opacity:.5}to{filter:blur(0);opacity:1}}
+    input,select,button,textarea{font-family:'Barlow',system-ui,sans-serif;}
   </style>
 </head>
 <body>
@@ -27,32 +28,48 @@ const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const {useState,useEffect,useRef}=React;
 
+// ─── BRAND ────────────────────────────────────────────────────────────────────
+const BRAND={
+  navy:"#0a1f44",
+  blue:"#1e5fa8",
+  blueLight:"#2d7dd2",
+  gold:"#f5a623",
+  goldDark:"#d4891a",
+  white:"#ffffff",
+  gray50:"#f8fafc",
+  gray100:"#f0f4f8",
+  gray200:"#e2e8f0",
+  gray300:"#cbd5e1",
+  gray500:"#64748b",
+  gray700:"#334155",
+  gray900:"#0f172a",
+  success:"#16a34a",
+  danger:"#dc2626",
+};
+
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PARTICIPANT_PASSWORD="LEXIPOL";
 const SM_PASSWORD="LEXIPOLSM";
 
 const PROJECTS={
-  shield:   {name:"Shield",   emoji:"🛡️", color:"#0ea5e9"},
-  vanguard: {name:"Vanguard", emoji:"⚔️", color:"#ea580c"},
-  valhalla: {name:"Valhalla", emoji:"🏔️", color:"#7c3aed"},
-  argo:     {name:"Argo",     emoji:"⚓", color:"#0891b2"},
-  golem:    {name:"Golem",    emoji:"🗿", color:"#78716c"},
-  omag:     {name:"OMAG",     emoji:"🔭", color:"#4f46e5"},
-  hydra:    {name:"Hydra",    emoji:"🐉", color:"#16a34a"},
-  prometheus:{name:"Prometheus",emoji:"🔥",color:"#dc2626"},
-  gato:     {name:"Gato",     emoji:"🐱", color:"#d97706"},
-  condor:   {name:"Condor",   emoji:"🦅", color:"#0f766e"},
+  shield:    {name:"Shield",    emoji:"🛡️", color:"#1e5fa8"},
+  vanguard:  {name:"Vanguard",  emoji:"⚔️", color:"#ea580c"},
+  valhalla:  {name:"Valhalla",  emoji:"🏔️", color:"#7c3aed"},
+  argo:      {name:"Argo",      emoji:"⚓", color:"#0891b2"},
+  golem:     {name:"Golem",     emoji:"🗿", color:"#78716c"},
+  omag:      {name:"OMAG",      emoji:"🔭", color:"#4f46e5"},
+  hydra:     {name:"Hydra",     emoji:"🐉", color:"#16a34a"},
+  prometheus:{name:"Prometheus",emoji:"🔥", color:"#dc2626"},
+  gato:      {name:"Gato",      emoji:"🐱", color:"#d97706"},
+  condor:    {name:"Condor",    emoji:"🦅", color:"#0f766e"},
 };
 
-const SCRUM_MASTERS=[
-  "Codi Saad","Colleen Willoughby","Isabel Mosquera","Jonathan Silva",
-  "Larissa Nichols","Michael Ebbs","Paulina Camacho","Sebastian Spiguel",
-];
+const SCRUM_MASTERS=["Codi Saad","Colleen Willoughby","Isabel Mosquera","Jonathan Silva","Larissa Nichols","Michael Ebbs","Paulina Camacho","Sebastian Spiguel"];
 
 const DEF_COLS=[
-  {id:"went-well",  label:"What went well?",      color:"#22c55e"},
-  {id:"improve",    label:"What didn't go well?",  color:"#ef4444"},
-  {id:"kudos",      label:"Kudos 🎉",               color:"#f59e0b"},
+  {id:"went-well",label:"What went well?",    color:"#16a34a"},
+  {id:"improve",  label:"What didn't go well?",color:"#dc2626"},
+  {id:"kudos",    label:"Kudos 🎉",             color:"#d97706"},
 ];
 
 const AV=[
@@ -63,63 +80,62 @@ const AV=[
   {bg:"#fce7f3",t:"#be185d"},{bg:"#ecfdf5",t:"#065f46"},
 ];
 
-// ─── UTILS ────────────────────────────────────────────────────────────────────
 const hsh=s=>{let h=0;for(let i=0;i<s.length;i++)h=((h<<5)-h)+s.charCodeAt(i);return Math.abs(h);};
 const ini=n=>n.split(" ").map(w=>w[0]||"").join("").toUpperCase().slice(0,2);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2);
 
 function Av({name,size=32}){
   const c=AV[hsh(name)%AV.length];
-  return(
-    <div style={{width:size,height:size,borderRadius:"50%",background:c.bg,color:c.t,
-      display:"flex",alignItems:"center",justifyContent:"center",
-      fontSize:size*.36,fontWeight:700,flexShrink:0,
-      border:"2px solid #fff",boxShadow:"0 1px 4px rgba(0,0,0,.14)",letterSpacing:"-.5px"}}>
-      {ini(name)}
-    </div>
-  );
+  return <div style={{width:size,height:size,borderRadius:"50%",background:c.bg,color:c.t,display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*.36,fontWeight:700,flexShrink:0,border:"2px solid #fff",boxShadow:"0 1px 4px rgba(0,0,0,.14)",letterSpacing:"-.5px"}}>{ini(name)}</div>;
 }
 
 function Spin(){
-  return(
-    <span style={{display:"inline-flex",gap:3,alignItems:"center"}}>
-      {[0,1,2].map(i=>(
-        <span key={i} style={{width:5,height:5,borderRadius:"50%",background:"#0d9488",
-          display:"inline-block",animation:"dot .8s infinite",animationDelay:`${i*.15}s`}}/>
-      ))}
-    </span>
-  );
+  return <span style={{display:"inline-flex",gap:3,alignItems:"center"}}>{[0,1,2].map(i=><span key={i} style={{width:5,height:5,borderRadius:"50%",background:BRAND.gold,display:"inline-block",animation:"dot .8s infinite",animationDelay:`${i*.15}s`}}/>)}</span>;
 }
 
-function Loader({msg="Loading..."}){
+function PageLoader({msg="Loading..."}){
   return(
-    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",
-      justifyContent:"center",background:"#f4f6f8",gap:14}}>
-      <Spin/><div style={{fontSize:14,color:"#64748b"}}>{msg}</div>
+    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:BRAND.navy,gap:16}}>
+      <Spin/>
+      <div style={{fontSize:14,color:"rgba(255,255,255,.6)",fontWeight:500}}>{msg}</div>
     </div>
   );
 }
 
-// ─── STYLES ───────────────────────────────────────────────────────────────────
-const bBase={display:"inline-flex",alignItems:"center",gap:6,padding:"8px 18px",
-  borderRadius:8,fontSize:13,fontWeight:600,cursor:"pointer",border:"none",transition:"all .15s"};
-const bPrimary={...bBase,background:"#0ea5e9",color:"#fff",boxShadow:"0 1px 4px rgba(14,165,233,.3)"};
-const bSuccess={...bBase,background:"#0d9488",color:"#fff",boxShadow:"0 1px 4px rgba(13,148,136,.3)"};
-const bGhost={...bBase,background:"#fff",color:"#374151",border:"1.5px solid #e5e7eb"};
-const bDanger={...bBase,background:"#fee2e2",color:"#dc2626",border:"1px solid #fca5a5"};
-const FI={width:"100%",border:"1.5px solid #e5e7eb",borderRadius:8,padding:"10px 14px",
-  fontSize:13,color:"#111827",background:"#fff",marginBottom:12,transition:"border-color .15s",outline:"none"};
-const FL={fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",
-  color:"#6b7280",display:"block",marginBottom:6};
+// ─── LEXIPOL LOGO SVG ─────────────────────────────────────────────────────────
+function LexipolLogo({size=32,white=false}){
+  const c=white?"#fff":BRAND.navy;
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:10}}>
+      <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
+        <rect width="40" height="40" rx="6" fill={white?BRAND.gold:BRAND.navy}/>
+        <path d="M8 8h6v18h12v6H8V8z" fill={white?BRAND.navy:BRAND.gold}/>
+        <path d="M20 8h12l-6 12h6l-12 12V20h-6L20 8z" fill={white?"#fff":BRAND.blueLight} opacity=".9"/>
+      </svg>
+      <div>
+        <div style={{fontSize:size*.55,fontWeight:900,color:c,letterSpacing:"1px",fontFamily:"'Barlow Condensed',sans-serif",lineHeight:1}}>LEXIPOL</div>
+        {size>=28&&<div style={{fontSize:size*.28,color:white?"rgba(255,255,255,.7)":BRAND.gray500,fontWeight:500,letterSpacing:".5px",lineHeight:1,marginTop:1}}>Retrospective Tool</div>}
+      </div>
+    </div>
+  );
+}
 
-// ─── AUTH ─────────────────────────────────────────────────────────────────────
+// ─── BUTTON STYLES ────────────────────────────────────────────────────────────
+const btn=(bg,color,extra={})=>({display:"inline-flex",alignItems:"center",gap:6,padding:"9px 20px",borderRadius:6,fontSize:13,fontWeight:700,cursor:"pointer",border:"none",transition:"all .15s",background:bg,color,letterSpacing:".3px",...extra});
+const bPrimary=btn(BRAND.blue,BRAND.white,{boxShadow:`0 2px 8px rgba(30,95,168,.3)`});
+const bGold=btn(BRAND.gold,BRAND.navy,{boxShadow:`0 2px 8px rgba(245,166,35,.3)`});
+const bGhost=btn("transparent",BRAND.gray700,{border:`1.5px solid ${BRAND.gray200}`,"background":"#fff"});
+const bDanger=btn("#fee2e2",BRAND.danger,{border:"1px solid #fca5a5"});
+const FI={width:"100%",border:`1.5px solid ${BRAND.gray200}`,borderRadius:6,padding:"10px 14px",fontSize:14,color:BRAND.gray900,background:"#fff",marginBottom:12,outline:"none",transition:"border-color .15s",fontWeight:500};
+const FL={fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:BRAND.gray500,display:"block",marginBottom:6};
+
+// ─── AUTH / LOGIN ─────────────────────────────────────────────────────────────
 function Auth({onLogin}){
   const [proj,setProj]=useState("");
   const [pw,setPw]=useState("");
   const [name,setName]=useState("");
   const [smName,setSmName]=useState("");
   const [err,setErr]=useState("");
-  const [isSM,setIsSM]=useState(false);
 
   function go(){
     setErr("");
@@ -133,81 +149,126 @@ function Auth({onLogin}){
       if(!proj){setErr("Please select a team.");return;}
       onLogin({project:proj,role:"participant",name:name.trim()});return;
     }
-    setErr("Wrong access code. Try again.");
+    setErr("Incorrect access code. Please try again.");
   }
 
-  // detect SM vs participant from password
-  function handlePw(v){
-    setPw(v);
-    setIsSM(v===SM_PASSWORD||v.toUpperCase()==="LEXIPOLSM");
-  }
+  const isSM=pw===SM_PASSWORD;
 
   return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",
-      padding:24,background:"linear-gradient(135deg,#e0f2fe 0%,#f0fdf4 50%,#fef9c3 100%)"}}>
-      <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:20,padding:40,
-        width:"100%",maxWidth:520,boxShadow:"0 8px 32px rgba(0,0,0,.08)"}}>
+    <div style={{minHeight:"100vh",display:"flex",background:BRAND.navy}}>
+      {/* Left panel — brand */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"center",
+        padding:"60px 64px",background:`linear-gradient(135deg, ${BRAND.navy} 0%, #0d2d5e 100%)`,
+        borderRight:`1px solid rgba(255,255,255,.08)`,minWidth:0}}>
+        <LexipolLogo size={44} white/>
+        <div style={{marginTop:48}}>
+          <div style={{fontSize:42,fontWeight:900,color:"#fff",lineHeight:1.1,
+            fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:".5px"}}>
+            Sprint<br/>Retrospective<br/>
+            <span style={{color:BRAND.gold}}>Tool</span>
+          </div>
+          <div style={{fontSize:15,color:"rgba(255,255,255,.55)",marginTop:16,lineHeight:1.7,
+            fontWeight:400,maxWidth:320}}>
+            Empower your scrum teams with structured, real-time retrospectives — from across the Americas.
+          </div>
+        </div>
+        <div style={{marginTop:56,display:"flex",flexDirection:"column",gap:16}}>
+          {[
+            {icon:"🔁",label:"Real-time sync across all participants"},
+            {icon:"🤖",label:"AI-powered card grouping"},
+            {icon:"📊",label:"Voting, action items & session summary"},
+          ].map(f=>(
+            <div key={f.label} style={{display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:36,height:36,borderRadius:8,background:"rgba(245,166,35,.15)",
+                border:"1px solid rgba(245,166,35,.3)",display:"flex",alignItems:"center",
+                justifyContent:"center",fontSize:16,flexShrink:0}}>{f.icon}</div>
+              <div style={{fontSize:13,color:"rgba(255,255,255,.6)",fontWeight:500}}>{f.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
 
-        {/* Header */}
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:28}}>
-          <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#0d9488)",
-            display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>🔁</div>
-          <div>
-            <div style={{fontSize:20,fontWeight:800,color:"#0f172a"}}>RetroForge</div>
-            <div style={{fontSize:12,color:"#94a3b8",fontWeight:500}}>Lexipol Sprint Retrospective</div>
+      {/* Right panel — form */}
+      <div style={{width:480,flexShrink:0,display:"flex",flexDirection:"column",
+        justifyContent:"center",padding:"48px 48px",background:"#fff",overflowY:"auto"}}>
+        <div style={{marginBottom:32}}>
+          <div style={{fontSize:24,fontWeight:800,color:BRAND.navy,marginBottom:6,
+            fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:".5px"}}>
+            SIGN IN TO YOUR SESSION
+          </div>
+          <div style={{fontSize:13,color:BRAND.gray500,fontWeight:500}}>
+            Select your team and enter your access code
           </div>
         </div>
 
         {/* Team grid */}
-        <label style={FL}>Select your team</label>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:16}}>
+        <label style={FL}>Select Team</label>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:7,marginBottom:16}}>
           {Object.entries(PROJECTS).map(([k,v])=>(
             <div key={k} onClick={()=>setProj(k)}
-              style={{background:proj===k?v.color+"18":"#f9fafb",
-                border:`2px solid ${proj===k?v.color:"#e5e7eb"}`,
-                borderRadius:10,padding:"10px 4px",cursor:"pointer",
+              style={{background:proj===k?BRAND.navy:"#f8fafc",
+                border:`2px solid ${proj===k?BRAND.navy:BRAND.gray200}`,
+                borderRadius:8,padding:"8px 4px",cursor:"pointer",
                 textAlign:"center",transition:"all .15s"}}>
-              <div style={{fontSize:22,marginBottom:4}}>{v.emoji}</div>
-              <div style={{fontSize:10,fontWeight:700,color:proj===k?v.color:"#6b7280"}}>{v.name}</div>
+              <div style={{fontSize:20,marginBottom:3}}>{v.emoji}</div>
+              <div style={{fontSize:10,fontWeight:700,
+                color:proj===k?"#fff":BRAND.gray500,letterSpacing:".3px"}}>
+                {v.name.toUpperCase()}
+              </div>
             </div>
           ))}
         </div>
 
         {/* Access code */}
         <label style={FL}>Access Code</label>
-        <input style={{...FI,letterSpacing:"2px",fontWeight:600}} type="password"
+        <input style={{...FI,letterSpacing:"3px",fontWeight:700}} type="password"
           placeholder="Enter code"
-          value={pw} onChange={e=>handlePw(e.target.value)}
-          onKeyDown={e=>e.key==="Enter"&&go()}/>
+          value={pw} onChange={e=>setPw(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&go()}
+          onFocus={e=>e.target.style.borderColor=BRAND.blue}
+          onBlur={e=>e.target.style.borderColor=BRAND.gray200}/>
 
-        {/* Name — SM dropdown or free input */}
-        {pw===SM_PASSWORD ? (
+        {/* Name */}
+        {isSM?(
           <>
             <label style={FL}>Scrum Master</label>
-            <select style={{...FI,cursor:"pointer"}} value={smName} onChange={e=>setSmName(e.target.value)}>
+            <select style={{...FI,cursor:"pointer"}} value={smName} onChange={e=>setSmName(e.target.value)}
+              onFocus={e=>e.target.style.borderColor=BRAND.blue}
+              onBlur={e=>e.target.style.borderColor=BRAND.gray200}>
               <option value="">Select your name…</option>
               {SCRUM_MASTERS.map(n=><option key={n} value={n}>{n}</option>)}
             </select>
           </>
-        ) : (
+        ):(
           <>
             <label style={FL}>Your Name</label>
-            <input style={FI} placeholder="e.g. Maria" value={name} onChange={e=>setName(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&go()}/>
+            <input style={FI} placeholder="e.g. Maria"
+              value={name} onChange={e=>setName(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&go()}
+              onFocus={e=>e.target.style.borderColor=BRAND.blue}
+              onBlur={e=>e.target.style.borderColor=BRAND.gray200}/>
           </>
         )}
 
         {err&&(
-          <div style={{background:"#fee2e2",color:"#dc2626",borderRadius:8,padding:"10px 14px",
-            fontSize:13,marginBottom:12,border:"1px solid #fca5a5"}}>
-            {err}
+          <div style={{background:"#fee2e2",color:BRAND.danger,borderRadius:6,
+            padding:"10px 14px",fontSize:13,marginBottom:12,border:"1px solid #fca5a5",fontWeight:600}}>
+            ⚠ {err}
           </div>
         )}
 
-        <button style={{...bPrimary,width:"100%",justifyContent:"center",
-          padding:"12px 0",fontSize:14,marginTop:4}} onClick={go}>
-          Enter Session →
+        <button style={{...bGold,width:"100%",justifyContent:"center",padding:"13px 0",
+          fontSize:15,fontWeight:800,letterSpacing:".5px",marginTop:4}} onClick={go}>
+          ENTER SESSION →
         </button>
+
+        <div style={{marginTop:24,padding:"14px 16px",background:"#f8fafc",borderRadius:8,
+          border:`1px solid ${BRAND.gray200}`,fontSize:12,color:BRAND.gray500,lineHeight:1.8}}>
+          <div style={{fontWeight:700,color:BRAND.gray700,marginBottom:4}}>Access Codes</div>
+          Participants: <strong style={{color:BRAND.navy}}>LEXIPOL</strong>
+          &nbsp;&nbsp;·&nbsp;&nbsp;
+          Scrum Masters: <strong style={{color:BRAND.navy}}>LEXIPOLSM</strong>
+        </div>
       </div>
     </div>
   );
@@ -215,27 +276,26 @@ function Auth({onLogin}){
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function Dashboard({user,onSelect}){
-  const proj=PROJECTS[user.project];
   return(
-    <div style={{padding:"36px 32px",maxWidth:900,margin:"0 auto"}}>
+    <div style={{padding:"36px 32px",maxWidth:960,margin:"0 auto"}}>
       <div style={{marginBottom:28}}>
-        <div style={{fontSize:13,color:"#94a3b8",fontWeight:600,marginBottom:4}}>
-          {proj.emoji} {proj.name} Team
-        </div>
-        <div style={{fontSize:26,fontWeight:800,color:"#0f172a"}}>Retrospectives</div>
+        <div style={{fontSize:13,color:BRAND.gray500,fontWeight:600,marginBottom:4,
+          textTransform:"uppercase",letterSpacing:"1px"}}>Welcome back, {user.name}</div>
+        <div style={{fontSize:26,fontWeight:800,color:BRAND.navy,fontFamily:"'Barlow Condensed',sans-serif",
+          letterSpacing:".5px"}}>SELECT A TEAM</div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:14}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12}}>
         {Object.entries(PROJECTS).map(([k,v])=>(
           <div key={k}
-            style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:14,
-              padding:22,cursor:"pointer",transition:"all .18s"}}
+            style={{background:"#fff",border:`2px solid ${BRAND.gray200}`,borderRadius:10,
+              padding:20,cursor:"pointer",transition:"all .18s"}}
             onClick={()=>onSelect(k)}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor=v.color;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,.08)";}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor="#e5e7eb";e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
-            <div style={{height:4,borderRadius:4,background:v.color,marginBottom:16}}/>
-            <div style={{fontSize:26,marginBottom:10}}>{v.emoji}</div>
-            <div style={{fontSize:15,fontWeight:700,color:"#0f172a"}}>{v.name}</div>
-            <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>View retros →</div>
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=BRAND.navy;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 4px 16px rgba(10,31,68,.12)";}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=BRAND.gray200;e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
+            <div style={{height:4,borderRadius:4,background:v.color,marginBottom:14}}/>
+            <div style={{fontSize:28,marginBottom:10}}>{v.emoji}</div>
+            <div style={{fontSize:14,fontWeight:700,color:BRAND.navy,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:".5px"}}>{v.name.toUpperCase()}</div>
+            <div style={{fontSize:12,color:BRAND.gray500,marginTop:3}}>View retros →</div>
           </div>
         ))}
       </div>
@@ -252,126 +312,105 @@ function RetroList({user,projectKey,onSelect,onBack}){
   const [form,setForm]=useState({name:"",votes:3,columns:DEF_COLS.map(c=>({...c}))});
 
   useEffect(()=>{load();},[ ]);
-
   async function load(){
     setLoading(true);
     const {data}=await sb.from("retros").select("*").eq("project_key",projectKey).order("created_at",{ascending:false});
     setRetros(data||[]);setLoading(false);
   }
-
   async function create(){
     if(!form.name.trim())return;
-    const r={id:uid(),project_key:projectKey,name:form.name.trim(),
-      votes_per_person:parseInt(form.votes)||3,step:1,columns:form.columns,
-      groups:[],action_items:{},ready_status:{},user_votes:{},group_votes:{}};
+    const r={id:uid(),project_key:projectKey,name:form.name.trim(),votes_per_person:parseInt(form.votes)||3,
+      step:1,columns:form.columns,groups:[],action_items:{},ready_status:{},user_votes:{},group_votes:{}};
     const {error}=await sb.from("retros").insert(r);
     if(!error){setShowCreate(false);onSelect(r.id);}
     else alert("Error: "+error.message);
   }
-
-  function addCol(){
-    const newCol={id:uid(),label:"New Column",color:"#64748b"};
-    setForm(f=>({...f,columns:[...f.columns,newCol]}));
-  }
+  function addCol(){setForm(f=>({...f,columns:[...f.columns,{id:uid(),label:"New Column",color:BRAND.blue}]}));}
   function removeCol(id){setForm(f=>({...f,columns:f.columns.filter(c=>c.id!==id)}));}
   function upCol(id,field,val){setForm(f=>({...f,columns:f.columns.map(c=>c.id===id?{...c,[field]:val}:c)}));}
 
-  if(loading)return <Loader msg="Loading retros..."/>;
+  if(loading)return <PageLoader msg="Loading retros..."/>;
+
+  const STEP_LABELS=["","Writing","Grouping","Voting","Action Items","Complete ✓"];
+  const STEP_COLORS=["",BRAND.gold,"#8b5cf6",BRAND.blue,BRAND.success,BRAND.success];
 
   return(
-    <div style={{padding:"32px 28px",maxWidth:760,margin:"0 auto"}}>
+    <div style={{padding:"32px 28px",maxWidth:800,margin:"0 auto"}}>
       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:24}}>
         <div>
           <button style={{...bGhost,padding:"5px 12px",fontSize:12,marginBottom:12}} onClick={onBack}>← Back</button>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <span style={{fontSize:28}}>{proj.emoji}</span>
             <div>
-              <div style={{fontSize:22,fontWeight:800,color:"#0f172a"}}>{proj.name}</div>
-              <div style={{fontSize:13,color:"#94a3b8"}}>Retro history</div>
+              <div style={{fontSize:22,fontWeight:800,color:BRAND.navy,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:".5px"}}>{proj.name.toUpperCase()}</div>
+              <div style={{fontSize:13,color:BRAND.gray500}}>Retrospective history</div>
             </div>
           </div>
         </div>
-        {user.role==="sm"&&(
-          <button style={bPrimary} onClick={()=>setShowCreate(true)}>+ New Retro</button>
-        )}
+        {user.role==="sm"&&<button style={bPrimary} onClick={()=>setShowCreate(true)}>+ New Retro</button>}
       </div>
 
       {retros.length===0&&(
-        <div style={{background:"#f8fafc",borderRadius:12,padding:"32px",textAlign:"center",border:"1.5px dashed #e5e7eb"}}>
+        <div style={{background:"#fff",borderRadius:10,padding:32,textAlign:"center",border:`2px dashed ${BRAND.gray200}`}}>
           <div style={{fontSize:28,marginBottom:10}}>📋</div>
-          <div style={{fontSize:14,color:"#94a3b8"}}>
+          <div style={{fontSize:14,color:BRAND.gray500,fontWeight:500}}>
             {user.role==="sm"?"No retros yet. Create one above.":"No retros yet. Ask your SM to create one."}
           </div>
         </div>
       )}
 
-      {retros.map(r=>{
-        const stepLabels=["","Writing","Grouping","Voting","Action Items","Complete ✓"];
-        const stepColors=["","#f59e0b","#8b5cf6","#0ea5e9","#0d9488","#16a34a"];
-        return(
-          <div key={r.id}
-            style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,
-              padding:"16px 20px",marginBottom:10,display:"flex",alignItems:"center",
-              justifyContent:"space-between",cursor:"pointer",transition:"all .15s"}}
-            onClick={()=>onSelect(r.id)}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor="#0ea5e9";e.currentTarget.style.boxShadow="0 2px 12px rgba(0,0,0,.06)";}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor="#e5e7eb";e.currentTarget.style.boxShadow="";}}>
-            <div>
-              <div style={{fontSize:15,fontWeight:700,color:"#0f172a"}}>{r.name}</div>
-              <div style={{display:"flex",alignItems:"center",gap:10,marginTop:5}}>
-                <span style={{fontSize:11,color:"#94a3b8"}}>
-                  {new Date(r.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
-                </span>
-                <span style={{background:stepColors[r.step]+"18",color:stepColors[r.step],
-                  borderRadius:100,padding:"2px 9px",fontSize:11,fontWeight:700,border:`1px solid ${stepColors[r.step]}33`}}>
-                  {stepLabels[r.step]}
-                </span>
-                <span style={{fontSize:11,color:"#94a3b8"}}>{r.votes_per_person} votes/person</span>
-              </div>
+      {retros.map(r=>(
+        <div key={r.id}
+          style={{background:"#fff",border:`1.5px solid ${BRAND.gray200}`,borderRadius:10,
+            padding:"16px 20px",marginBottom:10,display:"flex",alignItems:"center",
+            justifyContent:"space-between",cursor:"pointer",transition:"all .15s"}}
+          onClick={()=>onSelect(r.id)}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor=BRAND.navy;e.currentTarget.style.boxShadow="0 2px 12px rgba(10,31,68,.1)";}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor=BRAND.gray200;e.currentTarget.style.boxShadow="";}}>
+          <div>
+            <div style={{fontSize:15,fontWeight:700,color:BRAND.navy}}>{r.name}</div>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginTop:5}}>
+              <span style={{fontSize:11,color:BRAND.gray500}}>
+                {new Date(r.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
+              </span>
+              <span style={{background:STEP_COLORS[r.step]+"18",color:STEP_COLORS[r.step],
+                borderRadius:100,padding:"2px 9px",fontSize:11,fontWeight:700,
+                border:`1px solid ${STEP_COLORS[r.step]}33`}}>
+                {STEP_LABELS[r.step]}
+              </span>
+              <span style={{fontSize:11,color:BRAND.gray500}}>{r.votes_per_person} votes/person</span>
             </div>
-            <span style={{color:"#d1d5db",fontSize:20}}>→</span>
           </div>
-        );
-      })}
+          <span style={{color:BRAND.gray300,fontSize:20}}>→</span>
+        </div>
+      ))}
 
-      {/* Create modal */}
       {showCreate&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.4)",
-          backdropFilter:"blur(4px)",zIndex:300,display:"flex",alignItems:"center",
-          justifyContent:"center",padding:24}}>
-          <div style={{background:"#fff",borderRadius:16,padding:28,width:"100%",
-            maxWidth:500,boxShadow:"0 24px 64px rgba(0,0,0,.15)",maxHeight:"90vh",overflowY:"auto"}}>
-            <div style={{fontSize:18,fontWeight:800,color:"#0f172a",marginBottom:20}}>New Retrospective</div>
-
+        <div style={{position:"fixed",inset:0,background:"rgba(10,31,68,.5)",backdropFilter:"blur(4px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+          <div style={{background:"#fff",borderRadius:12,padding:28,width:"100%",maxWidth:500,boxShadow:"0 24px 64px rgba(0,0,0,.2)",maxHeight:"90vh",overflowY:"auto"}}>
+            <div style={{fontSize:18,fontWeight:800,color:BRAND.navy,marginBottom:20,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:".5px"}}>NEW RETROSPECTIVE</div>
             <label style={FL}>Sprint Name</label>
-            <input style={FI} placeholder="e.g. Sprint 42 · March 2026"
-              value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} autoFocus/>
-
+            <input style={FI} placeholder="e.g. Sprint 42 · March 2026" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} autoFocus
+              onFocus={e=>e.target.style.borderColor=BRAND.blue} onBlur={e=>e.target.style.borderColor=BRAND.gray200}/>
             <label style={FL}>Votes per person</label>
-            <input style={FI} type="number" min={1} max={20}
-              value={form.votes} onChange={e=>setForm(f=>({...f,votes:e.target.value}))}/>
-
+            <input style={FI} type="number" min={1} max={20} value={form.votes} onChange={e=>setForm(f=>({...f,votes:e.target.value}))}
+              onFocus={e=>e.target.style.borderColor=BRAND.blue} onBlur={e=>e.target.style.borderColor=BRAND.gray200}/>
             <label style={FL}>Columns</label>
             {form.columns.map(col=>(
               <div key={col.id} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                 <input type="color" value={col.color} onChange={e=>upCol(col.id,"color",e.target.value)}
-                  style={{width:32,height:32,border:"none",borderRadius:8,cursor:"pointer",
-                    padding:3,flexShrink:0,background:"transparent"}}/>
-                <input style={{...FI,marginBottom:0,flex:1}} value={col.label}
-                  onChange={e=>upCol(col.id,"label",e.target.value)}/>
+                  style={{width:32,height:32,border:"none",borderRadius:6,cursor:"pointer",padding:3,flexShrink:0}}/>
+                <input style={{...FI,marginBottom:0,flex:1}} value={col.label} onChange={e=>upCol(col.id,"label",e.target.value)}
+                  onFocus={e=>e.target.style.borderColor=BRAND.blue} onBlur={e=>e.target.style.borderColor=BRAND.gray200}/>
                 {form.columns.length>1&&(
                   <button onClick={()=>removeCol(col.id)}
-                    style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:7,
+                    style={{background:"#fee2e2",color:BRAND.danger,border:"none",borderRadius:6,
                       width:32,height:32,cursor:"pointer",fontSize:16,flexShrink:0,display:"flex",
-                      alignItems:"center",justifyContent:"center"}}>×</button>
+                      alignItems:"center",justifyContent:"center",fontWeight:700}}>×</button>
                 )}
               </div>
             ))}
-            <button onClick={addCol}
-              style={{...bGhost,fontSize:12,padding:"6px 14px",marginBottom:16}}>
-              + Add column
-            </button>
-
+            <button onClick={addCol} style={{...bGhost,fontSize:12,padding:"6px 14px",marginBottom:16}}>+ Add column</button>
             <div style={{display:"flex",gap:8,marginTop:8}}>
               <button style={bPrimary} onClick={create}>Create Retro</button>
               <button style={bGhost} onClick={()=>setShowCreate(false)}>Cancel</button>
@@ -401,15 +440,12 @@ function Board({user,projectKey,retroId,onBack}){
 
   useEffect(()=>{
     loadAll();
-    const retroSub=sb.channel(`retro-${retroId}`)
-      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"retros",filter:`id=eq.${retroId}`},
-        p=>{setRetro(p.new);}).subscribe();
-    const cardsSub=sb.channel(`cards-${retroId}`)
-      .on("postgres_changes",{event:"INSERT",schema:"public",table:"cards",filter:`retro_id=eq.${retroId}`},
-        p=>{setCards(prev=>prev.find(c=>c.id===p.new.id)?prev:[...prev,p.new]);})
-      .on("postgres_changes",{event:"DELETE",schema:"public",table:"cards",filter:`retro_id=eq.${retroId}`},
-        p=>{setCards(prev=>prev.filter(c=>c.id!==p.old.id));}).subscribe();
-    return()=>{sb.removeChannel(retroSub);sb.removeChannel(cardsSub);};
+    const rs=sb.channel(`retro-${retroId}`)
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"retros",filter:`id=eq.${retroId}`},p=>{setRetro(p.new);}).subscribe();
+    const cs=sb.channel(`cards-${retroId}`)
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"cards",filter:`retro_id=eq.${retroId}`},p=>{setCards(prev=>prev.find(c=>c.id===p.new.id)?prev:[...prev,p.new]);})
+      .on("postgres_changes",{event:"DELETE",schema:"public",table:"cards",filter:`retro_id=eq.${retroId}`},p=>{setCards(prev=>prev.filter(c=>c.id!==p.old.id));}).subscribe();
+    return()=>{sb.removeChannel(rs);sb.removeChannel(cs);};
   },[retroId]);
 
   async function loadAll(){
@@ -430,34 +466,26 @@ function Board({user,projectKey,retroId,onBack}){
 
   async function addCard(colId){
     const text=(drafts[colId]||"").trim();if(!text)return;
-    const card={id:uid(),retro_id:retroId,col_id:colId,text,author:user.name};
     setDrafts(d=>({...d,[colId]:""}));
-    await sb.from("cards").insert(card);
+    await sb.from("cards").insert({id:uid(),retro_id:retroId,col_id:colId,text,author:user.name});
   }
 
   async function toggleReady(){
-    const rs={...(retro.ready_status||{})};
-    rs[user.name]=!rs[user.name];
+    const rs={...(retro.ready_status||{})};rs[user.name]=!rs[user.name];
     await saveRetro({ready_status:rs});
   }
 
-  // ── Drag & Drop ────────────────────────────────────────────────────────────
+  // ── Drag ──
   function onDragStart(e,card){dragCard.current=card;e.dataTransfer.effectAllowed="move";}
   function onDragEnd(){dragCard.current=null;setDragOverCard(null);setDragOverGroup(null);}
-
   function onCardDragOver(e,tc){
     e.preventDefault();e.stopPropagation();
     if(!dragCard.current||dragCard.current.id===tc.id||dragCard.current.col_id!==tc.col_id)return;
     setDragOverCard(tc.id);setDragOverGroup(null);
   }
-  function onGroupDragOver(e,gid){
-    e.preventDefault();e.stopPropagation();
-    if(!dragCard.current)return;
-    setDragOverGroup(gid);setDragOverCard(null);
-  }
+  function onGroupDragOver(e,gid){e.preventDefault();e.stopPropagation();if(!dragCard.current)return;setDragOverGroup(gid);setDragOverCard(null);}
   async function onCardDrop(e,tc){
-    e.preventDefault();e.stopPropagation();
-    setDragOverCard(null);setDragOverGroup(null);
+    e.preventDefault();e.stopPropagation();setDragOverCard(null);setDragOverGroup(null);
     const src=dragCard.current;dragCard.current=null;
     if(!src||src.id===tc.id||src.col_id!==tc.col_id)return;
     let groups=[...(retro.groups||[])];
@@ -471,16 +499,13 @@ function Board({user,projectKey,retroId,onBack}){
       groups=groups.map(g=>g.id===srcG.id?{...g,cardIds:[...g.cardIds,tc.id]}:g);
     } else {
       const ng={id:uid(),name:"New Group",cardIds:[src.id,tc.id]};
-      groups=[...groups,ng];
-      setExpanded(ex=>({...ex,[ng.id]:true}));
+      groups=[...groups,ng];setExpanded(ex=>({...ex,[ng.id]:true}));
     }
     await saveRetro({groups:groups.filter(g=>g.cardIds.length>0)});
   }
   async function onGroupDrop(e,gid){
-    e.preventDefault();e.stopPropagation();
-    setDragOverCard(null);setDragOverGroup(null);
-    const src=dragCard.current;dragCard.current=null;
-    if(!src)return;
+    e.preventDefault();e.stopPropagation();setDragOverCard(null);setDragOverGroup(null);
+    const src=dragCard.current;dragCard.current=null;if(!src)return;
     let groups=[...(retro.groups||[])];
     const srcG=groups.find(g=>g.cardIds.includes(src.id));
     if(srcG&&srcG.id===gid)return;
@@ -489,20 +514,16 @@ function Board({user,projectKey,retroId,onBack}){
     await saveRetro({groups:groups.filter(g=>g.cardIds.length>0)});
   }
   async function ungroupCard(cardId){
-    const groups=(retro.groups||[]).map(g=>({...g,cardIds:g.cardIds.filter(id=>id!==cardId)})).filter(g=>g.cardIds.length>0);
-    await saveRetro({groups});
+    await saveRetro({groups:(retro.groups||[]).map(g=>({...g,cardIds:g.cardIds.filter(id=>id!==cardId)})).filter(g=>g.cardIds.length>0)});
   }
 
-  // ── AI Grouping ────────────────────────────────────────────────────────────
+  // ── AI ──
   async function runGrouping(){
-    setAiLoading(true);
-    await saveRetro({step:2,ready_status:{}});
+    setAiLoading(true);await saveRetro({step:2,ready_status:{}});
     const cs=cards.map(c=>({id:c.id,text:c.text}));
     try{
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,
-          system:"You are an agile coach. Return ONLY valid JSON.",
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:"You are an agile coach. Return ONLY valid JSON.",
           messages:[{role:"user",content:`Group these retro cards into 3-6 thematic clusters.\nCards:${JSON.stringify(cs)}\nReturn ONLY JSON:{"groups":[{"name":"Group Name","cardIds":["id1"]}]}`}]})});
       const d=await res.json();
       const p=JSON.parse((d.content?.[0]?.text||"{}").replace(/```json|```/g,"").trim());
@@ -510,44 +531,33 @@ function Board({user,projectKey,retroId,onBack}){
     }catch{setAiSug([]);}
     setAiLoading(false);
   }
-
   async function acceptGroups(){
     const groups=aiSug.map(g=>({...g,id:uid()}));
     const ex={};groups.forEach(g=>{ex[g.id]=true;});setExpanded(ex);
     await saveRetro({groups});setAiSug(null);
   }
 
-  // ── Voting ─────────────────────────────────────────────────────────────────
+  // ── Vote ──
   const vUsed=()=>Object.values((retro?.user_votes||{})[user.name]||{}).reduce((a,b)=>a+b,0);
   const vLeft=()=>(retro?.votes_per_person||3)-vUsed();
-
   async function voteItem(id,delta){
-    const vl=vLeft();
-    const uv={...(retro.user_votes||{})};
-    const myV={...(uv[user.name]||{})};
-    const cur=myV[id]||0;
-    if(delta>0&&vl<=0)return;
+    const vl=vLeft();const uv={...(retro.user_votes||{})};const myV={...(uv[user.name]||{})};
+    const cur=myV[id]||0;if(delta>0&&vl<=0)return;
     myV[id]=Math.max(0,cur+delta);uv[user.name]=myV;
-    const gv={...(retro.group_votes||{})};
-    gv[id]=Object.values(uv).reduce((s,mv)=>s+(mv[id]||0),0);
+    const gv={...(retro.group_votes||{})};gv[id]=Object.values(uv).reduce((s,mv)=>s+(mv[id]||0),0);
     await saveRetro({user_votes:uv,group_votes:gv});
   }
 
-  // ── Topics ─────────────────────────────────────────────────────────────────
+  // ── Topics ──
   const allTopics=()=>{
     if(!retro)return[];
     const gv=retro.group_votes||{};
     const grouped=new Set((retro.groups||[]).flatMap(g=>g.cardIds));
     const items=[];
-    (retro.groups||[]).forEach(g=>{
-      items.push({type:"group",id:g.id,name:g.name,votes:gv[g.id]||0,cards:cards.filter(c=>g.cardIds.includes(c.id))});
-    });
-    cards.filter(c=>!grouped.has(c.id)).forEach(c=>{
-      items.push({type:"card",id:c.id,name:c.text,votes:gv[c.id]||0,cards:[c]});
-    });
+    (retro.groups||[]).forEach(g=>{items.push({type:"group",id:g.id,name:g.name,votes:gv[g.id]||0,cards:cards.filter(c=>g.cardIds.includes(c.id))});});
+    cards.filter(c=>!grouped.has(c.id)).forEach(c=>{items.push({type:"card",id:c.id,name:c.text,votes:gv[c.id]||0,cards:[c]});});
     return items.sort((a,b)=>b.votes-a.votes);
   };
-
   async function addAction(){
     if(!actDraft.trim())return;
     const topics=allTopics();const t=topics[topicIdx];if(!t)return;
@@ -560,58 +570,76 @@ function Board({user,projectKey,retroId,onBack}){
     ai2[tid]=(ai2[tid]||[]).filter(x=>x.id!==itemId);
     await saveRetro({action_items:ai2});
   }
-
   async function advance(){
     if(!retro||retro.step>=5)return;
     if(retro.step===1){await runGrouping();return;}
     await saveRetro({step:retro.step+1,ready_status:{}});
   }
-  async function goBack(){
-    if(!retro||retro.step<=1)return;
-    await saveRetro({step:retro.step-1,ready_status:{}});
-  }
+  async function goBack(){if(!retro||retro.step<=1)return;await saveRetro({step:retro.step-1,ready_status:{}});}
 
-  if(loading)return <Loader msg="Loading session..."/>;
-  if(!retro)return <div style={{padding:40,color:"#64748b"}}>Session not found.</div>;
+  if(loading)return <PageLoader msg="Loading session..."/>;
+  if(!retro)return <div style={{padding:40,color:BRAND.gray500}}>Session not found.</div>;
 
   const readyNames=Object.entries(retro.ready_status||{}).filter(([,v])=>v).map(([k])=>k);
   const isReady=!!retro.ready_status?.[user.name];
   const vl=vLeft();
   const knownPeople=Array.from(new Set([user.name,...cards.map(c=>c.author)]));
-  const colColor=colId=>(retro.columns.find(c=>c.id===colId)||{color:"#94a3b8"}).color;
-  const STEP_LABELS=["","Share your thoughts.","Review & group cards.","Vote to prioritize.","Create action items.","Session complete!"];
+  const colColor=colId=>(retro.columns.find(c=>c.id===colId)||{color:BRAND.gray300}).color;
+  const proj=PROJECTS[projectKey];
 
-  // ── Card Step 1 ────────────────────────────────────────────────────────────
+  // ── VoteBtn ──
+  const VoteBtn=({id})=>{
+    const myV=((retro.user_votes||{})[user.name]||{})[id]||0;
+    const totV=retro.group_votes?.[id]||0;
+    const canUp=vl>0,canDown=myV>0;
+    return(
+      <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+        <div style={{background:BRAND.gray100,borderRadius:6,padding:"3px 8px",
+          fontSize:13,fontWeight:800,color:BRAND.navy,minWidth:28,textAlign:"center"}}>
+          {totV}
+        </div>
+        <button onClick={()=>voteItem(id,1)} disabled={!canUp}
+          style={{background:canUp?"#dcfce7":"#f1f5f9",border:"none",borderRadius:6,
+            width:32,height:32,cursor:canUp?"pointer":"not-allowed",fontSize:17,
+            display:"flex",alignItems:"center",justifyContent:"center",
+            opacity:canUp?1:.35,transition:"all .12s"}}>👍</button>
+        <button onClick={()=>voteItem(id,-1)} disabled={!canDown}
+          style={{background:canDown?"#fee2e2":"#f1f5f9",border:"none",borderRadius:6,
+            width:32,height:32,cursor:canDown?"pointer":"not-allowed",fontSize:17,
+            display:"flex",alignItems:"center",justifyContent:"center",
+            opacity:canDown?1:.35,transition:"all .12s"}}>👎</button>
+      </div>
+    );
+  };
+
+  // ── Card Step1 ──
   const Card1=({card,col})=>{
     const isMe=card.author===user.name;
     const revealed=retro.step>=2;
     const show=isMe||revealed;
     return(
-      <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:10,
-        padding:"12px 14px",display:"flex",alignItems:"flex-start",gap:10,
-        boxShadow:"0 1px 4px rgba(0,0,0,.05)",marginBottom:8,
-        animation:revealed&&!isMe?"reveal .5s ease":"fadeIn .2s ease",
+      <div style={{background:"#fff",border:`1.5px solid ${BRAND.gray200}`,borderRadius:8,
+        padding:"11px 14px",display:"flex",alignItems:"center",gap:10,
+        boxShadow:"0 1px 4px rgba(0,0,0,.04)",marginBottom:7,animation:"fadeIn .2s ease",
         transition:"box-shadow .15s"}}
         onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,.08)"}
-        onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,.05)"}>
+        onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,.04)"}>
         <div style={{width:4,borderRadius:4,background:col.color,alignSelf:"stretch",minHeight:32,flexShrink:0}}/>
-        <div style={{width:32,height:32,borderRadius:"50%",background:show?AV[hsh(card.author)%AV.length].bg:"#f1f5f9",
+        <div style={{width:30,height:30,borderRadius:"50%",background:show?AV[hsh(card.author)%AV.length].bg:"#f1f5f9",
           color:show?AV[hsh(card.author)%AV.length].t:"#94a3b8",display:"flex",alignItems:"center",
-          justifyContent:"center",fontSize:11,fontWeight:700,flexShrink:0,border:"2px solid #fff",
+          justifyContent:"center",fontSize:10,fontWeight:700,flexShrink:0,border:"2px solid #fff",
           boxShadow:"0 1px 3px rgba(0,0,0,.1)",filter:show?"none":"blur(4px)"}}>
-          {show?ini(card.author):"??"}
+          {show?ini(card.author):"?"}
         </div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:13,fontWeight:600,color:show?"#0f172a":"transparent",
-            textShadow:show?"none":"0 0 8px rgba(0,0,0,.5)",
-            filter:show?"none":"blur(6px)",
-            userSelect:show?"auto":"none",
-            lineHeight:1.5,transition:"filter .4s ease"}}>
+          <div style={{fontSize:13,fontWeight:600,color:show?BRAND.navy:BRAND.navy,
+            filter:show?"none":"blur(6px)",userSelect:show?"auto":"none",
+            lineHeight:1.5,transition:"filter .5s ease"}}>
             {card.text}
           </div>
           {show&&(
-            <div style={{fontSize:11,color:"#94a3b8",marginTop:3,display:"flex",alignItems:"center",gap:4}}>
-              {isMe&&<span style={{background:"#e0f2fe",color:"#0ea5e9",borderRadius:4,padding:"1px 5px",fontSize:10,fontWeight:700}}>You</span>}
+            <div style={{fontSize:11,color:BRAND.gray500,marginTop:3,display:"flex",alignItems:"center",gap:5}}>
+              {isMe&&<span style={{background:BRAND.navy,color:"#fff",borderRadius:4,padding:"1px 6px",fontSize:10,fontWeight:700}}>You</span>}
               {card.author}
             </div>
           )}
@@ -620,149 +648,88 @@ function Board({user,projectKey,retroId,onBack}){
     );
   };
 
-  // ── Card Step 2 (draggable) ────────────────────────────────────────────────
+  // ── Card Step2 ──
   const Card2=({card,inGroup=false})=>{
     const isOver=dragOverCard===card.id;
     return(
       <div draggable onDragStart={e=>onDragStart(e,card)} onDragEnd={onDragEnd}
         onDragOver={e=>onCardDragOver(e,card)} onDrop={e=>onCardDrop(e,card)}
-        style={{background:isOver?"#eff6ff":"#fff",
-          border:`1.5px solid ${isOver?"#3b82f6":"#e5e7eb"}`,
-          borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"flex-start",gap:8,
-          boxShadow:isOver?"0 0 0 3px rgba(59,130,246,.15)":"0 1px 3px rgba(0,0,0,.05)",
-          marginBottom:7,cursor:"grab",transition:"all .12s",animation:"fadeIn .18s ease"}}>
-        <span style={{color:"#d1d5db",fontSize:14,flexShrink:0,paddingTop:2,cursor:"grab"}}>⠿</span>
-        <div style={{width:3,borderRadius:3,background:colColor(card.col_id),alignSelf:"stretch",minHeight:24,flexShrink:0}}/>
-        <Av name={card.author} size={22}/>
-        <div style={{flex:1}}>
-          <div style={{fontSize:13,fontWeight:600,color:"#0f172a",lineHeight:1.5}}>{card.text}</div>
-          <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{card.author}</div>
+        style={{background:isOver?"#eff6ff":"#fff",border:`1.5px solid ${isOver?BRAND.blue:BRAND.gray200}`,
+          borderRadius:8,padding:"9px 12px",display:"flex",alignItems:"center",gap:8,
+          boxShadow:isOver?`0 0 0 3px rgba(30,95,168,.15)`:"0 1px 3px rgba(0,0,0,.04)",
+          marginBottom:6,cursor:"grab",transition:"all .12s",animation:"fadeIn .18s ease"}}>
+        <span style={{color:BRAND.gray300,fontSize:13,flexShrink:0}}>⠿</span>
+        <div style={{width:3,borderRadius:3,background:colColor(card.col_id),alignSelf:"stretch",minHeight:22,flexShrink:0}}/>
+        <Av name={card.author} size={20}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:600,color:BRAND.navy,lineHeight:1.4}}>{card.text}</div>
+          <div style={{fontSize:11,color:BRAND.gray500,marginTop:1}}>{card.author}</div>
         </div>
-        {inGroup&&(
-          <button title="Remove from group" onClick={()=>ungroupCard(card.id)}
-            style={{background:"none",border:"none",cursor:"pointer",color:"#d1d5db",
-              fontSize:16,flexShrink:0,padding:"0 2px",lineHeight:1}}
-            onMouseEnter={e=>e.target.style.color="#ef4444"}
-            onMouseLeave={e=>e.target.style.color="#d1d5db"}>×</button>
-        )}
+        {inGroup&&<button onClick={()=>ungroupCard(card.id)}
+          style={{background:"none",border:"none",cursor:"pointer",color:BRAND.gray300,fontSize:15,padding:"0 2px"}}
+          onMouseEnter={e=>e.target.style.color=BRAND.danger}
+          onMouseLeave={e=>e.target.style.color=BRAND.gray300}>×</button>}
       </div>
     );
   };
 
-  // ── Vote button ────────────────────────────────────────────────────────────
-  const VoteBtn=({id,isGroup=false})=>{
-    const myV=((retro.user_votes||{})[user.name]||{})[id]||0;
-    const totV=retro.group_votes?.[id]||0;
-    const canUp=vl>0;
-    const canDown=myV>0;
-    return(
-      <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
-        <div style={{background:"#f1f5f9",borderRadius:8,padding:"3px 8px",
-          fontSize:13,fontWeight:800,color:"#374151",minWidth:28,textAlign:"center"}}>
-          {totV}
-        </div>
-        <button
-          onClick={()=>voteItem(id,1)}
-          disabled={!canUp}
-          title={canUp?"Vote up":"No votes left"}
-          style={{background:canUp?"#dcfce7":"#f1f5f9",border:"none",borderRadius:8,
-            width:34,height:34,cursor:canUp?"pointer":"not-allowed",
-            fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",
-            transition:"all .12s",opacity:canUp?1:.4,
-            boxShadow:canUp?"0 1px 3px rgba(34,197,94,.2)":"none"}}>
-          👍
-        </button>
-        <button
-          onClick={()=>voteItem(id,-1)}
-          disabled={!canDown}
-          title={canDown?"Remove vote":"No votes to remove"}
-          style={{background:canDown?"#fee2e2":"#f1f5f9",border:"none",borderRadius:8,
-            width:34,height:34,cursor:canDown?"pointer":"not-allowed",
-            fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",
-            transition:"all .12s",opacity:canDown?1:.4,
-            boxShadow:canDown?"0 1px 3px rgba(239,68,68,.2)":"none"}}>
-          👎
-        </button>
-      </div>
-    );
-  };
-
-  // ── Summary ────────────────────────────────────────────────────────────────
+  // ── Summary ──
   const Summary=()=>{
     const topics=allTopics();
     const allActions=[];
     topics.forEach(t=>{((retro.action_items||{})[t.id]||[]).forEach(item=>{allActions.push({...item,topic:t});});});
     return(
-      <div style={{padding:"32px 28px",maxWidth:820,margin:"0 auto",
-        overflowY:"auto",height:"calc(100vh - 155px)"}}>
+      <div style={{padding:"32px 28px",maxWidth:860,margin:"0 auto",overflowY:"auto",height:"calc(100vh - 160px)"}}>
         <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:28}}>
-          <div style={{fontSize:40}}>🎉</div>
+          <div style={{width:52,height:52,borderRadius:12,background:BRAND.navy,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26}}>🎉</div>
           <div>
-            <div style={{fontSize:24,fontWeight:800,color:"#0f172a"}}>Retro Complete!</div>
-            <div style={{fontSize:13,color:"#94a3b8",marginTop:2}}>{retro.name}</div>
+            <div style={{fontSize:24,fontWeight:800,color:BRAND.navy,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:".5px"}}>RETRO COMPLETE</div>
+            <div style={{fontSize:13,color:BRAND.gray500,marginTop:2}}>{retro.name}</div>
           </div>
         </div>
-
-        {/* Stats */}
         <div style={{display:"flex",gap:12,marginBottom:28}}>
-          {[
-            {label:"Action Items",value:allActions.length,color:"#0ea5e9",bg:"#e0f2fe"},
-            {label:"Topics Covered",value:topics.filter(t=>((retro.action_items||{})[t.id]||[]).length>0).length,color:"#0d9488",bg:"#ccfbf1"},
+          {[{label:"Action Items",value:allActions.length,color:BRAND.blue,bg:"#dbeafe"},
+            {label:"Topics Covered",value:topics.filter(t=>((retro.action_items||{})[t.id]||[]).length>0).length,color:BRAND.success,bg:"#dcfce7"},
             {label:"Total Votes",value:Object.values(retro.group_votes||{}).reduce((a,b)=>a+b,0),color:"#7c3aed",bg:"#ede9fe"},
-            {label:"Participants",value:knownPeople.length,color:"#ea580c",bg:"#ffedd5"},
-          ].map(s=>(
-            <div key={s.label} style={{flex:1,background:s.bg,borderRadius:12,padding:"16px",textAlign:"center"}}>
-              <div style={{fontSize:30,fontWeight:800,color:s.color}}>{s.value}</div>
-              <div style={{fontSize:11,color:s.color,marginTop:4,fontWeight:700,opacity:.7}}>{s.label.toUpperCase()}</div>
+            {label:"Participants",value:knownPeople.length,color:BRAND.gold,bg:"#fef3c7"}].map(s=>(
+            <div key={s.label} style={{flex:1,background:s.bg,borderRadius:10,padding:"16px",textAlign:"center"}}>
+              <div style={{fontSize:30,fontWeight:900,color:s.color,fontFamily:"'Barlow Condensed',sans-serif"}}>{s.value}</div>
+              <div style={{fontSize:10,color:s.color,marginTop:4,fontWeight:700,letterSpacing:"1px",opacity:.8}}>{s.label.toUpperCase()}</div>
             </div>
           ))}
         </div>
-
         {allActions.length===0?(
-          <div style={{background:"#f8fafc",borderRadius:12,padding:32,textAlign:"center",border:"1.5px dashed #e5e7eb"}}>
+          <div style={{background:"#f8fafc",borderRadius:10,padding:32,textAlign:"center",border:`2px dashed ${BRAND.gray200}`}}>
             <div style={{fontSize:28,marginBottom:8}}>📋</div>
-            <div style={{fontSize:14,color:"#94a3b8"}}>No action items were created.</div>
+            <div style={{fontSize:14,color:BRAND.gray500}}>No action items were created.</div>
           </div>
         ):(
           <>
-            <div style={{fontSize:11,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",
-              color:"#94a3b8",marginBottom:14}}>Action Items — {allActions.length} total</div>
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:BRAND.gray500,marginBottom:14}}>
+              Action Items — {allActions.length} total
+            </div>
             {allActions.map((action,i)=>{
               const t=action.topic;const fc=t.cards[0];
               return(
-                <div key={action.id} style={{background:"#fff",border:"1.5px solid #e5e7eb",
-                  borderRadius:12,padding:"16px 20px",marginBottom:10,
-                  boxShadow:"0 1px 4px rgba(0,0,0,.05)",animation:"fadeIn .2s ease"}}>
+                <div key={action.id} style={{background:"#fff",border:`1.5px solid ${BRAND.gray200}`,borderRadius:10,padding:"16px 20px",marginBottom:10,boxShadow:"0 1px 4px rgba(0,0,0,.05)",animation:"fadeIn .2s ease"}}>
                   <div style={{display:"flex",alignItems:"flex-start",gap:14}}>
-                    <div style={{background:"#e0f2fe",color:"#0ea5e9",borderRadius:10,
-                      width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",
-                      fontSize:14,fontWeight:800,flexShrink:0}}>{i+1}</div>
+                    <div style={{background:BRAND.navy,color:"#fff",borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,flexShrink:0}}>{i+1}</div>
                     <div style={{flex:1}}>
-                      <div style={{fontSize:15,fontWeight:700,color:"#0f172a",marginBottom:10}}>{action.text}</div>
-                      <div style={{background:"#f8fafc",borderRadius:9,padding:"10px 12px",
-                        display:"flex",alignItems:"center",gap:10,border:"1px solid #f1f5f9"}}>
-                        <div style={{width:3,borderRadius:3,background:fc?colColor(fc.col_id):"#94a3b8",
-                          alignSelf:"stretch",minHeight:24,flexShrink:0}}/>
+                      <div style={{fontSize:15,fontWeight:700,color:BRAND.navy,marginBottom:10}}>{action.text}</div>
+                      <div style={{background:BRAND.gray50,borderRadius:8,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,border:`1px solid ${BRAND.gray100}`}}>
+                        <div style={{width:3,borderRadius:3,background:fc?colColor(fc.col_id):BRAND.gray300,alignSelf:"stretch",minHeight:24,flexShrink:0}}/>
                         {fc&&<Av name={fc.author} size={22}/>}
                         <div style={{flex:1}}>
                           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
-                            <span style={{fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"1px"}}>
-                              {t.type==="group"?"Group":"Ticket"}
-                            </span>
-                            <span style={{background:"#dcfce7",color:"#16a34a",borderRadius:100,
-                              padding:"1px 8px",fontSize:11,fontWeight:700}}>
-                              👍 {t.votes} vote{t.votes!==1?"s":""}
-                            </span>
+                            <span style={{fontSize:10,fontWeight:700,color:BRAND.gray500,textTransform:"uppercase",letterSpacing:"1px"}}>{t.type==="group"?"Group":"Ticket"}</span>
+                            <span style={{background:"#dcfce7",color:BRAND.success,borderRadius:100,padding:"1px 8px",fontSize:11,fontWeight:700}}>👍 {t.votes} vote{t.votes!==1?"s":""}</span>
                           </div>
-                          <div style={{fontSize:13,color:"#374151",fontWeight:600}}>{t.name}</div>
+                          <div style={{fontSize:13,color:BRAND.gray700,fontWeight:600}}>{t.name}</div>
                           {t.type==="group"&&t.cards.length>1&&(
                             <div style={{display:"flex",gap:5,marginTop:7,flexWrap:"wrap"}}>
                               {t.cards.map(c=>(
-                                <div key={c.id} style={{display:"flex",alignItems:"center",gap:4,
-                                  background:"#fff",border:"1px solid #e5e7eb",borderRadius:7,
-                                  padding:"2px 8px",fontSize:11}}>
-                                  <Av name={c.author} size={14}/>
-                                  <span style={{color:"#64748b"}}>{c.text.slice(0,30)}{c.text.length>30?"…":""}</span>
+                                <div key={c.id} style={{display:"flex",alignItems:"center",gap:4,background:"#fff",border:`1px solid ${BRAND.gray200}`,borderRadius:6,padding:"2px 8px",fontSize:11}}>
+                                  <Av name={c.author} size={14}/><span style={{color:BRAND.gray500}}>{c.text.slice(0,30)}{c.text.length>30?"…":""}</span>
                                 </div>
                               ))}
                             </div>
@@ -780,81 +747,73 @@ function Board({user,projectKey,retroId,onBack}){
     );
   };
 
-  // ── RENDER ─────────────────────────────────────────────────────────────────
-  const proj=PROJECTS[projectKey];
+  // ─────────────────────────────────────────────────────────────────────────────
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100vh"}}>
 
       {/* Topbar */}
-      <div style={{background:"#fff",borderBottom:"1px solid #e5e7eb",height:52,
-        display:"flex",alignItems:"center",padding:"0 20px",gap:10,flexShrink:0,
-        boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
-        <button style={{...bGhost,padding:"4px 10px",fontSize:11}} onClick={onBack}>← Back</button>
-        <span style={{color:"#e5e7eb"}}>|</span>
-        <span style={{fontSize:16}}>{proj.emoji}</span>
-        <span style={{fontSize:14,fontWeight:800,color:"#0f172a"}}>{proj.name}</span>
-        <span style={{color:"#e5e7eb"}}>|</span>
-        <span style={{fontSize:13,color:"#64748b",fontWeight:500,overflow:"hidden",
-          textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{retro.name}</span>
-        {saving&&<span style={{fontSize:11,color:"#94a3b8",marginLeft:4}}>saving…</span>}
-        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
-          {user.role==="sm"&&(
-            <span style={{background:"#eef2ff",color:"#4338ca",border:"1px solid #c7d2fe",
-              borderRadius:100,padding:"2px 10px",fontSize:11,fontWeight:700}}>SM</span>
-          )}
+      <div style={{background:BRAND.navy,height:52,display:"flex",alignItems:"center",
+        padding:"0 20px",gap:12,flexShrink:0}}>
+        <button style={{...bGhost,padding:"4px 10px",fontSize:11,
+          background:"rgba(255,255,255,.1)",color:"#fff",border:"1px solid rgba(255,255,255,.15)"}}
+          onClick={onBack}>← Back</button>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:15}}>{proj.emoji}</span>
+          <span style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,.9)",
+            fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:".5px"}}>{proj.name.toUpperCase()}</span>
+          <span style={{color:"rgba(255,255,255,.3)"}}>·</span>
+          <span style={{fontSize:12,color:"rgba(255,255,255,.6)",overflow:"hidden",
+            textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{retro.name}</span>
+        </div>
+        {saving&&<span style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>saving…</span>}
+        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
+          {user.role==="sm"&&<span style={{background:BRAND.gold,color:BRAND.navy,borderRadius:100,padding:"2px 10px",fontSize:11,fontWeight:800}}>SM</span>}
           <Av name={user.name} size={28}/>
-          <span style={{fontSize:12,fontWeight:600,color:"#374151"}}>{user.name}</span>
+          <span style={{fontSize:12,fontWeight:600,color:"#fff"}}>{user.name}</span>
         </div>
       </div>
 
       {/* Color bar */}
-      <div style={{display:"flex",height:4,flexShrink:0}}>
+      <div style={{display:"flex",height:3,flexShrink:0}}>
         {retro.columns.map(c=><div key={c.id} style={{flex:1,background:c.color}}/>)}
       </div>
 
       {/* Step bar */}
-      <div style={{background:"#fff",borderBottom:"1px solid #e5e7eb",height:50,
-        display:"flex",alignItems:"center",padding:"0 20px",gap:16,flexShrink:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,flex:1}}>
-          {/* Step pills */}
+      <div style={{background:"#fff",borderBottom:`1px solid ${BRAND.gray200}`,height:48,
+        display:"flex",alignItems:"center",padding:"0 20px",gap:16,flexShrink:0,
+        boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,flex:1,flexWrap:"wrap"}}>
           {["Write","Group","Vote","Actions"].map((label,i)=>{
-            const s=i+1;
-            const active=retro.step===s;
-            const done=retro.step>s;
+            const s=i+1;const active=retro.step===s;const done=retro.step>s;
             return(
-              <div key={s} style={{display:"flex",alignItems:"center",gap:6}}>
-                {i>0&&<span style={{color:"#d1d5db",fontSize:12}}>›</span>}
+              <div key={s} style={{display:"flex",alignItems:"center",gap:5}}>
+                {i>0&&<span style={{color:BRAND.gray300,fontSize:11}}>›</span>}
                 <div style={{display:"flex",alignItems:"center",gap:5,padding:"3px 10px",borderRadius:100,
-                  background:active?"#0ea5e9":done?"#dcfce7":"#f1f5f9",
-                  border:`1px solid ${active?"#0ea5e9":done?"#16a34a":"#e5e7eb"}`}}>
-                  <span style={{fontSize:11,fontWeight:700,
-                    color:active?"#fff":done?"#16a34a":"#94a3b8"}}>
-                    {done?"✓ ":""}{label}
+                  background:active?BRAND.navy:done?"#dcfce7":"#f8fafc",
+                  border:`1px solid ${active?BRAND.navy:done?BRAND.success:BRAND.gray200}`}}>
+                  <span style={{fontSize:11,fontWeight:700,letterSpacing:".3px",
+                    color:active?"#fff":done?BRAND.success:BRAND.gray500}}>
+                    {done?"✓ ":""}{label.toUpperCase()}
                   </span>
                 </div>
               </div>
             );
           })}
           {retro.step===3&&(
-            <span style={{background:"#fee2e2",color:"#dc2626",borderRadius:100,
+            <span style={{background:"#fee2e2",color:BRAND.danger,borderRadius:100,
               padding:"3px 10px",fontSize:11,fontWeight:700,marginLeft:4}}>
               {vl} vote{vl!==1?"s":""} left
             </span>
           )}
         </div>
-
-        {/* Actions */}
         <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
           {retro.step<5&&(
             <>
-              <span style={{fontSize:12,fontWeight:600,color:"#6b7280"}}>Ready?</span>
-              <div style={{width:42,height:24,borderRadius:100,
-                background:isReady?"#22c55e":"#e5e7eb",
-                position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}}
-                onClick={toggleReady}>
-                <div style={{position:"absolute",top:3,left:isReady?21:3,width:18,height:18,
-                  borderRadius:"50%",background:"#fff",
-                  boxShadow:"0 1px 4px rgba(0,0,0,.2)",transition:"left .2s"}}/>
+              <span style={{fontSize:12,fontWeight:600,color:BRAND.gray500}}>Ready?</span>
+              <div style={{width:42,height:24,borderRadius:100,background:isReady?"#22c55e":BRAND.gray200,
+                position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}} onClick={toggleReady}>
+                <div style={{position:"absolute",top:3,left:isReady?21:3,width:18,height:18,borderRadius:"50%",
+                  background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.2)",transition:"left .2s"}}/>
               </div>
             </>
           )}
@@ -862,14 +821,12 @@ function Board({user,projectKey,retroId,onBack}){
             <button style={{...bGhost,padding:"5px 12px",fontSize:12}} onClick={goBack}>‹ Back</button>
           )}
           {retro.step<4&&user.role==="sm"&&(
-            <button style={bSuccess} onClick={advance} disabled={aiLoading||saving}>
+            <button style={bPrimary} onClick={advance} disabled={aiLoading||saving}>
               {aiLoading?<><Spin/> Working…</>:"Next ›"}
             </button>
           )}
           {retro.step===4&&user.role==="sm"&&(
-            <button style={bPrimary} onClick={advance} disabled={saving}>
-              Finish & Summary →
-            </button>
+            <button style={bGold} onClick={advance} disabled={saving}>Finish & Summary →</button>
           )}
         </div>
       </div>
@@ -878,37 +835,27 @@ function Board({user,projectKey,retroId,onBack}){
       <div style={{flex:1,display:"flex",overflow:"hidden"}}>
         <div style={{flex:1,overflowX:"auto",overflowY:"auto"}}>
 
-          {/* ── STEP 1: Write ── */}
+          {/* ── STEP 1 ── */}
           {retro.step===1&&(
             <div style={{display:"flex",height:"100%"}}>
               {retro.columns.map(col=>{
                 const colCards=cards.filter(c=>c.col_id===col.id);
                 return(
-                  <div key={col.id} style={{flex:1,borderRight:"1px solid #f1f5f9",
-                    display:"flex",flexDirection:"column",minWidth:260,background:"#fafafa"}}>
-                    {/* Column header */}
-                    <div style={{padding:"16px 18px 10px",borderBottom:"2px solid "+col.color+"44",
-                      background:"#fff"}}>
+                  <div key={col.id} style={{flex:1,borderRight:`1px solid ${BRAND.gray100}`,display:"flex",flexDirection:"column",minWidth:260,background:"#fafafa"}}>
+                    <div style={{padding:"14px 18px 10px",borderBottom:`3px solid ${col.color}`,background:"#fff"}}>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <div style={{width:10,height:10,borderRadius:"50%",background:col.color,flexShrink:0}}/>
-                        <div style={{fontSize:15,fontWeight:700,color:"#0f172a"}}>{col.label}</div>
-                        <div style={{marginLeft:"auto",background:col.color+"18",color:col.color,
-                          borderRadius:100,padding:"1px 8px",fontSize:11,fontWeight:700}}>
-                          {colCards.length}
-                        </div>
+                        <div style={{width:10,height:10,borderRadius:"50%",background:col.color}}/>
+                        <div style={{fontSize:14,fontWeight:700,color:BRAND.navy}}>{col.label}</div>
+                        <div style={{marginLeft:"auto",background:col.color+"18",color:col.color,borderRadius:100,padding:"1px 8px",fontSize:11,fontWeight:700}}>{colCards.length}</div>
                       </div>
-                      <input
-                        style={{width:"100%",border:"none",borderBottom:"1.5px solid #e5e7eb",
-                          padding:"8px 0",fontSize:13,background:"transparent",color:"#0f172a",
-                          marginTop:10,outline:"none"}}
+                      <input style={{width:"100%",border:"none",borderBottom:`1.5px solid ${BRAND.gray200}`,padding:"8px 0",fontSize:13,background:"transparent",color:BRAND.navy,marginTop:10,outline:"none",fontWeight:500}}
                         placeholder="+ Type your idea and hit enter"
-                        value={drafts[col.id]||""}
-                        onChange={e=>setDrafts(d=>({...d,[col.id]:e.target.value}))}
+                        value={drafts[col.id]||""} onChange={e=>setDrafts(d=>({...d,[col.id]:e.target.value}))}
                         onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addCard(col.id);}}}
                         onFocus={e=>e.target.style.borderBottomColor=col.color}
-                        onBlur={e=>e.target.style.borderBottomColor="#e5e7eb"}/>
+                        onBlur={e=>e.target.style.borderBottomColor=BRAND.gray200}/>
                     </div>
-                    <div style={{flex:1,padding:"12px 12px",overflowY:"auto"}}>
+                    <div style={{flex:1,padding:"12px",overflowY:"auto"}}>
                       {colCards.map(card=><Card1 key={card.id} card={card} col={col}/>)}
                     </div>
                   </div>
@@ -917,35 +864,26 @@ function Board({user,projectKey,retroId,onBack}){
             </div>
           )}
 
-          {/* ── STEP 2: Group ── */}
+          {/* ── STEP 2 ── */}
           {retro.step===2&&(
             <div style={{display:"flex",height:"100%"}}>
               {aiSug&&(
                 <div style={{position:"absolute",top:0,left:0,right:185,zIndex:10}}>
-                  <div style={{background:"#eef2ff",border:"1.5px solid #c7d2fe",borderRadius:12,
-                    padding:"14px 18px",margin:"12px 16px",boxShadow:"0 4px 16px rgba(99,102,241,.15)"}}>
-                    <div style={{fontSize:13,fontWeight:700,color:"#4338ca",marginBottom:12}}>
-                      ✦ AI suggested {aiSug.length} groups — review and accept
-                    </div>
+                  <div style={{background:"#eef2ff",border:`1.5px solid #c7d2fe`,borderRadius:10,padding:"14px 18px",margin:"10px 14px",boxShadow:"0 4px 16px rgba(99,102,241,.15)"}}>
+                    <div style={{fontSize:13,fontWeight:700,color:"#4338ca",marginBottom:10}}>✦ AI suggested {aiSug.length} groups</div>
                     {aiSug.map((g,i)=>{
                       const gc=cards.filter(c=>g.cardIds.includes(c.id));
                       return(
-                        <div key={i} style={{background:"#fff",border:"1px solid #e0e7ff",
-                          borderRadius:9,padding:"10px 14px",marginBottom:8}}>
+                        <div key={i} style={{background:"#fff",border:"1px solid #e0e7ff",borderRadius:8,padding:"10px 12px",marginBottom:8}}>
                           <div style={{fontSize:13,fontWeight:700,color:"#312e81",marginBottom:6}}>🗂 {g.name}</div>
                           <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                            {gc.map(c=>(
-                              <span key={c.id} style={{background:"#f0f4ff",border:"1px solid #e0e7ff",
-                                borderRadius:7,padding:"2px 9px",fontSize:11,color:"#4338ca"}}>
-                                {c.text.slice(0,35)}{c.text.length>35?"…":""}
-                              </span>
-                            ))}
+                            {gc.map(c=><span key={c.id} style={{background:"#f0f4ff",border:"1px solid #e0e7ff",borderRadius:6,padding:"2px 8px",fontSize:11,color:"#4338ca"}}>{c.text.slice(0,35)}{c.text.length>35?"…":""}</span>)}
                           </div>
                         </div>
                       );
                     })}
-                    <div style={{display:"flex",gap:8,marginTop:12}}>
-                      <button style={bSuccess} onClick={acceptGroups}>✓ Accept Groups</button>
+                    <div style={{display:"flex",gap:8,marginTop:10}}>
+                      <button style={bPrimary} onClick={acceptGroups}>✓ Accept Groups</button>
                       <button style={bGhost} onClick={()=>setAiSug(null)}>Dismiss</button>
                     </div>
                   </div>
@@ -955,56 +893,30 @@ function Board({user,projectKey,retroId,onBack}){
                 const freeCards=cards.filter(c=>c.col_id===col.id&&!(retro.groups||[]).some(g=>g.cardIds.includes(c.id)));
                 const colGroups=(retro.groups||[]).filter(g=>cards.some(c=>g.cardIds.includes(c.id)&&c.col_id===col.id));
                 return(
-                  <div key={col.id} style={{flex:1,borderRight:"1px solid #f1f5f9",
-                    display:"flex",flexDirection:"column",minWidth:270,background:"#fafafa"}}>
-                    <div style={{padding:"14px 16px 8px",borderBottom:"2px solid "+col.color+"44",background:"#fff"}}>
+                  <div key={col.id} style={{flex:1,borderRight:`1px solid ${BRAND.gray100}`,display:"flex",flexDirection:"column",minWidth:270,background:"#fafafa",overflowY:"auto"}}>
+                    <div style={{padding:"14px 16px 8px",borderBottom:`3px solid ${col.color}`,background:"#fff"}}>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         <div style={{width:10,height:10,borderRadius:"50%",background:col.color}}/>
-                        <div style={{fontSize:15,fontWeight:700,color:"#0f172a"}}>{col.label}</div>
+                        <div style={{fontSize:14,fontWeight:700,color:BRAND.navy}}>{col.label}</div>
                       </div>
-                      <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,marginTop:6,letterSpacing:".5px"}}>
-                        DRAG CARDS ONTO EACH OTHER TO GROUP
-                      </div>
+                      <div style={{fontSize:10,color:BRAND.gray500,fontWeight:600,marginTop:5,letterSpacing:".5px"}}>DRAG CARDS ONTO EACH OTHER TO GROUP</div>
                     </div>
-                    <div style={{flex:1,padding:"10px 10px 16px",overflowY:"auto"}}>
+                    <div style={{flex:1,padding:"10px 10px 16px"}}>
                       {colGroups.map(g=>{
                         const gc=cards.filter(c=>g.cardIds.includes(c.id)&&c.col_id===col.id);
-                        const isExp=expanded[g.id]!==false;
-                        const isOvG=dragOverGroup===g.id;
+                        const isExp=expanded[g.id]!==false;const isOvG=dragOverGroup===g.id;
                         return(
                           <div key={g.id}
-                            onDragOver={e=>onGroupDragOver(e,g.id)}
-                            onDragLeave={()=>setDragOverGroup(null)}
-                            onDrop={e=>onGroupDrop(e,g.id)}
-                            style={{background:isOvG?"#eff6ff":"#fff",
-                              border:`1.5px solid ${isOvG?"#3b82f6":"#e5e7eb"}`,
-                              borderRadius:10,marginBottom:10,transition:"all .12s",
-                              boxShadow:isOvG?"0 0 0 3px rgba(59,130,246,.15)":"0 1px 3px rgba(0,0,0,.04)"}}>
-                            <div style={{display:"flex",alignItems:"center",gap:8,
-                              padding:"8px 12px",borderBottom:isExp?"1px solid #f1f5f9":"none"}}>
+                            onDragOver={e=>onGroupDragOver(e,g.id)} onDragLeave={()=>setDragOverGroup(null)} onDrop={e=>onGroupDrop(e,g.id)}
+                            style={{background:isOvG?"#eff6ff":"#fff",border:`1.5px solid ${isOvG?BRAND.blue:BRAND.gray200}`,borderRadius:9,marginBottom:10,transition:"all .12s",boxShadow:isOvG?`0 0 0 3px rgba(30,95,168,.12)`:"0 1px 3px rgba(0,0,0,.04)"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:isExp?`1px solid ${BRAND.gray100}`:"none"}}>
                               <span style={{fontSize:14}}>🗂</span>
-                              <input style={{flex:1,border:"none",background:"transparent",
-                                fontSize:13,fontWeight:700,color:"#0f172a",outline:"none"}}
-                                value={g.name}
+                              <input style={{flex:1,border:"none",background:"transparent",fontSize:13,fontWeight:700,color:BRAND.navy,outline:"none"}} value={g.name}
                                 onChange={e=>{const groups=retro.groups.map(x=>x.id===g.id?{...x,name:e.target.value}:x);saveRetro({groups});}}/>
-                              <span style={{fontSize:11,color:"#94a3b8",fontWeight:600,
-                                background:"#f1f5f9",borderRadius:100,padding:"1px 7px"}}>{gc.length}</span>
-                              <button style={{background:"none",border:"none",cursor:"pointer",
-                                color:"#94a3b8",fontSize:13,padding:"2px 4px"}}
-                                onClick={()=>setExpanded(ex=>({...ex,[g.id]:!isExp}))}>
-                                {isExp?"▲":"▼"}
-                              </button>
+                              <span style={{fontSize:11,color:BRAND.gray500,fontWeight:600,background:BRAND.gray100,borderRadius:100,padding:"1px 7px"}}>{gc.length}</span>
+                              <button style={{background:"none",border:"none",cursor:"pointer",color:BRAND.gray500,fontSize:12,padding:"2px 4px"}} onClick={()=>setExpanded(ex=>({...ex,[g.id]:!isExp}))}>{isExp?"▲":"▼"}</button>
                             </div>
-                            {isExp&&(
-                              <div style={{padding:"8px"}}>
-                                {gc.map(card=><Card2 key={card.id} card={card} inGroup/>)}
-                                {gc.length===0&&(
-                                  <div style={{fontSize:11,color:"#94a3b8",textAlign:"center",padding:"10px 0"}}>
-                                    Drop cards here
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                            {isExp&&<div style={{padding:"8px"}}>{gc.map(card=><Card2 key={card.id} card={card} inGroup/>)}</div>}
                           </div>
                         );
                       })}
@@ -1016,74 +928,56 @@ function Board({user,projectKey,retroId,onBack}){
             </div>
           )}
 
-          {/* ── STEP 3: Vote ── */}
+          {/* ── STEP 3: Vote — compact single row ── */}
           {retro.step===3&&(
             <div style={{display:"flex",height:"100%"}}>
               {retro.columns.map(col=>{
                 const colG=(retro.groups||[]).filter(g=>cards.some(c=>g.cardIds.includes(c.id)&&c.col_id===col.id));
                 const freeC=cards.filter(c=>c.col_id===col.id&&!(retro.groups||[]).some(g=>g.cardIds.includes(c.id)));
                 return(
-                  <div key={col.id} style={{flex:1,borderRight:"1px solid #f1f5f9",
-                    display:"flex",flexDirection:"column",minWidth:260,background:"#fafafa"}}>
-                    <div style={{padding:"14px 16px 10px",borderBottom:"2px solid "+col.color+"44",background:"#fff"}}>
+                  <div key={col.id} style={{flex:1,borderRight:`1px solid ${BRAND.gray100}`,display:"flex",flexDirection:"column",minWidth:240,background:"#fafafa"}}>
+                    <div style={{padding:"12px 16px",borderBottom:`3px solid ${col.color}`,background:"#fff"}}>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         <div style={{width:10,height:10,borderRadius:"50%",background:col.color}}/>
-                        <div style={{fontSize:15,fontWeight:700,color:"#0f172a"}}>{col.label}</div>
+                        <div style={{fontSize:14,fontWeight:700,color:BRAND.navy}}>{col.label}</div>
                       </div>
                     </div>
-                    <div style={{flex:1,padding:"10px",overflowY:"auto"}}>
+                    <div style={{flex:1,padding:"8px",overflowY:"auto"}}>
+                      {/* Free cards — compact single row */}
                       {freeC.map(card=>(
-                        <div key={card.id} style={{background:"#fff",border:"1.5px solid #e5e7eb",
-                          borderRadius:10,padding:"12px 14px",marginBottom:8,
-                          boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
-                          <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:10}}>
-                            <div style={{width:4,borderRadius:4,background:col.color,alignSelf:"stretch",minHeight:28,flexShrink:0}}/>
-                            <Av name={card.author} size={24}/>
-                            <div style={{flex:1}}>
-                              <div style={{fontSize:13,fontWeight:600,color:"#0f172a",lineHeight:1.5}}>{card.text}</div>
-                              <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{card.author}</div>
-                            </div>
+                        <div key={card.id} style={{background:"#fff",border:`1.5px solid ${BRAND.gray200}`,borderRadius:8,padding:"8px 10px",marginBottom:6,display:"flex",alignItems:"center",gap:8,boxShadow:"0 1px 3px rgba(0,0,0,.04)"}}>
+                          <div style={{width:4,borderRadius:4,background:col.color,alignSelf:"stretch",minHeight:20,flexShrink:0}}/>
+                          <Av name={card.author} size={22}/>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:12,fontWeight:600,color:BRAND.navy,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{card.text}</div>
+                            <div style={{fontSize:10,color:BRAND.gray500,marginTop:1}}>{card.author}</div>
                           </div>
-                          <div style={{display:"flex",justifyContent:"flex-end"}}>
-                            <VoteBtn id={card.id}/>
-                          </div>
+                          <VoteBtn id={card.id}/>
                         </div>
                       ))}
+                      {/* Groups */}
                       {colG.map(g=>{
                         const gc=cards.filter(c=>g.cardIds.includes(c.id)&&c.col_id===col.id);
                         const isExp=expanded[g.id]!==false;
                         return(
-                          <div key={g.id} style={{background:"#fff",border:"1.5px solid #e5e7eb",
-                            borderRadius:10,marginBottom:8,overflow:"hidden",
-                            boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
-                            <div style={{display:"flex",alignItems:"center",
-                              justifyContent:"space-between",padding:"10px 14px",
-                              borderBottom:isExp?"1px solid #f1f5f9":"none"}}>
-                              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                <span style={{fontSize:14}}>🗂</span>
-                                <span style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{g.name}</span>
-                                <span style={{fontSize:11,color:"#94a3b8",background:"#f1f5f9",
-                                  borderRadius:100,padding:"1px 7px",fontWeight:600}}>{gc.length}</span>
+                          <div key={g.id} style={{background:"#fff",border:`1.5px solid ${BRAND.gray200}`,borderRadius:8,marginBottom:7,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.04)"}}>
+                            {/* Group header — single row with votes */}
+                            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderBottom:isExp?`1px solid ${BRAND.gray100}`:"none"}}>
+                              <span style={{fontSize:13}}>🗂</span>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:12,fontWeight:700,color:BRAND.navy,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.name}</div>
+                                <div style={{fontSize:10,color:BRAND.gray500,marginTop:1}}>{gc.length} card{gc.length!==1?"s":""}</div>
                               </div>
-                              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                                <VoteBtn id={g.id} isGroup/>
-                                <button style={{background:"none",border:"none",cursor:"pointer",
-                                  color:"#94a3b8",fontSize:12,padding:"2px 4px"}}
-                                  onClick={()=>setExpanded(ex=>({...ex,[g.id]:!isExp}))}>
-                                  {isExp?"▲":"▼"}
-                                </button>
-                              </div>
+                              <VoteBtn id={g.id}/>
+                              <button style={{background:"none",border:"none",cursor:"pointer",color:BRAND.gray300,fontSize:12,padding:"2px 4px",marginLeft:2}}
+                                onClick={()=>setExpanded(ex=>({...ex,[g.id]:!isExp}))}>{isExp?"▲":"▼"}</button>
                             </div>
                             {isExp&&(
-                              <div style={{padding:"8px 12px"}}>
+                              <div style={{padding:"6px 8px"}}>
                                 {gc.map(card=>(
-                                  <div key={card.id} style={{background:"#f8fafc",borderRadius:7,
-                                    padding:"7px 10px",marginBottom:5,display:"flex",
-                                    alignItems:"center",gap:8,fontSize:12}}>
-                                    <div style={{width:3,borderRadius:3,background:col.color,
-                                      alignSelf:"stretch",minHeight:18,flexShrink:0}}/>
-                                    <Av name={card.author} size={18}/>
-                                    <span style={{color:"#374151",fontWeight:500}}>{card.text}</span>
+                                  <div key={card.id} style={{background:BRAND.gray50,borderRadius:6,padding:"5px 8px",marginBottom:4,display:"flex",alignItems:"center",gap:7,fontSize:12}}>
+                                    <div style={{width:3,borderRadius:3,background:col.color,alignSelf:"stretch",minHeight:16,flexShrink:0}}/>
+                                    <Av name={card.author} size={16}/><span style={{color:BRAND.gray700,fontWeight:500}}>{card.text}</span>
                                   </div>
                                 ))}
                               </div>
@@ -1102,113 +996,94 @@ function Board({user,projectKey,retroId,onBack}){
           {retro.step===4&&(()=>{
             const topics=allTopics();
             if(topics.length===0)return(
-              <div style={{padding:48,textAlign:"center",color:"#94a3b8"}}>
+              <div style={{padding:48,textAlign:"center",color:BRAND.gray500}}>
                 <div style={{fontSize:36,marginBottom:12}}>🗳️</div>
-                <div style={{fontSize:15,fontWeight:600}}>No cards found. Go back and add some first.</div>
+                <div style={{fontSize:15,fontWeight:600}}>No cards found.</div>
               </div>
             );
-            const t=topics[Math.min(topicIdx,topics.length-1)];
+            const tIdx=Math.min(topicIdx,topics.length-1);
+            const t=topics[tIdx];
             const items=(retro.action_items||{})[t.id]||[];
             const fc=t.cards[0];
             return(
               <div style={{display:"flex",height:"100%"}}>
-                {/* Left panel */}
-                <div style={{width:300,flexShrink:0,borderRight:"1px solid #e5e7eb",
-                  padding:22,overflowY:"auto",background:"#fafafa"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:18}}>
-                    <button style={{...bGhost,padding:"3px 10px",fontSize:11}}
-                      onClick={()=>setTopicIdx(i=>Math.max(0,i-1))} disabled={topicIdx===0}>‹</button>
-                    <span style={{fontSize:12,fontWeight:700,color:"#6b7280",flex:1,textAlign:"center"}}>
-                      Topic ({Math.min(topicIdx,topics.length-1)+1}/{topics.length})
-                    </span>
-                    <button style={{...bGhost,padding:"3px 10px",fontSize:11}}
-                      onClick={()=>setTopicIdx(i=>Math.min(topics.length-1,i+1))} disabled={topicIdx>=topics.length-1}>›</button>
+                {/* Left */}
+                <div style={{width:300,flexShrink:0,borderRight:`1px solid ${BRAND.gray200}`,padding:20,overflowY:"auto",background:"#fafafa"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:16}}>
+                    <button style={{...bGhost,padding:"3px 10px",fontSize:11}} onClick={()=>setTopicIdx(i=>Math.max(0,i-1))} disabled={tIdx===0}>‹</button>
+                    <span style={{fontSize:12,fontWeight:700,color:BRAND.gray500,flex:1,textAlign:"center"}}>Topic ({tIdx+1}/{topics.length})</span>
+                    <button style={{...bGhost,padding:"3px 10px",fontSize:11}} onClick={()=>setTopicIdx(i=>Math.min(topics.length-1,i+1))} disabled={tIdx>=topics.length-1}>›</button>
                   </div>
-                  <div style={{fontSize:18,fontWeight:800,color:"#0f172a",marginBottom:8,lineHeight:1.3}}>{t.name}</div>
-                  <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"#dcfce7",
-                    color:"#16a34a",borderRadius:100,padding:"4px 12px",fontSize:12,fontWeight:700,marginBottom:18}}>
+                  <div style={{fontSize:17,fontWeight:800,color:BRAND.navy,marginBottom:8,lineHeight:1.3,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:".3px"}}>{t.name.toUpperCase()}</div>
+                  <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"#dcfce7",color:BRAND.success,borderRadius:100,padding:"4px 12px",fontSize:12,fontWeight:700,marginBottom:16}}>
                     👍 {t.votes} vote{t.votes!==1?"s":""}
                   </div>
                   {t.type==="group"&&t.cards.map(card=>(
-                    <div key={card.id} style={{background:"#fff",borderRadius:8,padding:"8px 10px",
-                      marginBottom:6,display:"flex",alignItems:"center",gap:8,fontSize:12,
-                      border:"1px solid #e5e7eb"}}>
-                      <div style={{width:3,borderRadius:3,background:colColor(card.col_id),
-                        alignSelf:"stretch",minHeight:18,flexShrink:0}}/>
-                      <Av name={card.author} size={18}/>
-                      <span style={{color:"#374151",fontWeight:500}}>{card.text}</span>
+                    <div key={card.id} style={{background:"#fff",borderRadius:7,padding:"7px 10px",marginBottom:6,display:"flex",alignItems:"center",gap:7,fontSize:12,border:`1px solid ${BRAND.gray200}`}}>
+                      <div style={{width:3,borderRadius:3,background:colColor(card.col_id),alignSelf:"stretch",minHeight:18,flexShrink:0}}/>
+                      <Av name={card.author} size={18}/><span style={{color:BRAND.gray700,fontWeight:500}}>{card.text}</span>
                     </div>
                   ))}
-                  {/* All topics list */}
-                  <div style={{marginTop:20,paddingTop:16,borderTop:"1px solid #e5e7eb"}}>
-                    <div style={{fontSize:10,fontWeight:700,letterSpacing:"1.5px",
-                      textTransform:"uppercase",color:"#94a3b8",marginBottom:10}}>All Topics</div>
+                  <div style={{marginTop:18,paddingTop:14,borderTop:`1px solid ${BRAND.gray200}`}}>
+                    <div style={{fontSize:10,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:BRAND.gray500,marginBottom:10}}>All Topics</div>
                     {topics.map((tp,i)=>(
                       <div key={tp.id} onClick={()=>setTopicIdx(i)}
-                        style={{display:"flex",alignItems:"center",gap:7,padding:"6px 8px",
-                          borderRadius:8,marginBottom:3,cursor:"pointer",
-                          background:i===Math.min(topicIdx,topics.length-1)?"#e0f2fe":"transparent",
-                          transition:"background .12s"}}>
-                        <span style={{fontSize:11,fontWeight:700,color:"#0ea5e9",minWidth:28}}>👍{tp.votes}</span>
-                        <span style={{fontSize:12,color:"#374151",flex:1,overflow:"hidden",
-                          textOverflow:"ellipsis",whiteSpace:"nowrap",
-                          fontWeight:i===topicIdx?700:400}}>{tp.name}</span>
-                        <span style={{fontSize:10,color:"#94a3b8",flexShrink:0}}>
-                          {((retro.action_items||{})[tp.id]||[]).length}✓
-                        </span>
+                        style={{display:"flex",alignItems:"center",gap:7,padding:"5px 8px",borderRadius:7,marginBottom:3,cursor:"pointer",background:i===tIdx?BRAND.navy:"transparent",transition:"background .12s"}}>
+                        <span style={{fontSize:11,fontWeight:700,color:i===tIdx?"#fff":BRAND.blue,minWidth:28}}>👍{tp.votes}</span>
+                        <span style={{fontSize:12,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:i===tIdx?700:500,color:i===tIdx?"#fff":BRAND.gray700}}>{tp.name}</span>
+                        <span style={{fontSize:10,color:i===tIdx?"rgba(255,255,255,.6)":BRAND.gray500,flexShrink:0}}>{((retro.action_items||{})[tp.id]||[]).length}✓</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Right panel */}
-                <div style={{flex:1,display:"flex",flexDirection:"column",
-                  alignItems:"center",padding:"40px 28px",overflowY:"auto"}}>
-                  <div style={{fontSize:60,fontWeight:800,color:"#0ea5e9",lineHeight:1,marginBottom:4}}>{items.length}</div>
-                  <div style={{fontSize:16,fontWeight:600,color:"#6b7280",marginBottom:8}}>Action Items</div>
-                  {/* Topic context */}
-                  <div style={{background:"#f8fafc",border:"1.5px solid #e5e7eb",borderRadius:10,
-                    padding:"10px 16px",marginBottom:24,width:"100%",maxWidth:540,
-                    display:"flex",alignItems:"center",gap:10}}>
-                    {fc&&<><div style={{width:3,borderRadius:3,background:colColor(fc.col_id),
-                      alignSelf:"stretch",minHeight:20,flexShrink:0}}/>
-                    <Av name={fc.author} size={24}/></>}
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:2,
-                        textTransform:"uppercase",letterSpacing:"1px"}}>
-                        Current Topic · 👍 {t.votes} votes
+                {/* Right */}
+                <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",padding:"36px 28px",overflowY:"auto"}}>
+                  {/* Count + nav in same row */}
+                  <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:4}}>
+                    <div style={{fontSize:64,fontWeight:900,color:BRAND.blue,lineHeight:1,fontFamily:"'Barlow Condensed',sans-serif"}}>{items.length}</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      <button style={{...bGold,padding:"5px 14px",fontSize:12}}
+                        onClick={()=>setTopicIdx(i=>Math.min(topics.length-1,i+1))}
+                        disabled={tIdx>=topics.length-1}>
+                        Next topic ›
+                      </button>
+                      <div style={{fontSize:10,color:BRAND.gray500,textAlign:"center",fontWeight:600}}>
+                        {tIdx+1} of {topics.length}
                       </div>
-                      <div style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{t.name}</div>
                     </div>
                   </div>
-                  <input
-                    style={{width:"100%",maxWidth:540,border:"none",
-                      borderBottom:"2px solid #e5e7eb",padding:"10px 0",fontSize:14,
-                      color:"#0f172a",background:"transparent",outline:"none"}}
+                  <div style={{fontSize:15,fontWeight:600,color:BRAND.gray500,marginBottom:8}}>Action Items</div>
+
+                  {/* Topic context */}
+                  <div style={{background:BRAND.gray50,border:`1.5px solid ${BRAND.gray200}`,borderRadius:9,padding:"10px 16px",marginBottom:22,width:"100%",maxWidth:540,display:"flex",alignItems:"center",gap:10}}>
+                    {fc&&<><div style={{width:3,borderRadius:3,background:colColor(fc.col_id),alignSelf:"stretch",minHeight:20,flexShrink:0}}/><Av name={fc.author} size={24}/></>}
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:10,color:BRAND.gray500,fontWeight:700,marginBottom:2,textTransform:"uppercase",letterSpacing:"1px"}}>Current Topic · 👍 {t.votes} votes</div>
+                      <div style={{fontSize:13,fontWeight:700,color:BRAND.navy}}>{t.name}</div>
+                    </div>
+                  </div>
+
+                  <input style={{width:"100%",maxWidth:540,border:"none",borderBottom:`2px solid ${BRAND.gray200}`,padding:"10px 0",fontSize:14,color:BRAND.navy,background:"transparent",outline:"none",fontWeight:500}}
                     placeholder="+ Type your idea here and hit enter"
                     value={actDraft} onChange={e=>setActDraft(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addAction();}}}
-                    onFocus={e=>e.target.style.borderBottomColor="#0ea5e9"}
-                    onBlur={e=>e.target.style.borderBottomColor="#e5e7eb"}/>
+                    onFocus={e=>e.target.style.borderBottomColor=BRAND.blue}
+                    onBlur={e=>e.target.style.borderBottomColor=BRAND.gray200}/>
+
                   {items.map(item=>(
-                    <div key={item.id} style={{width:"100%",maxWidth:540,background:"#fff",
-                      border:"1.5px solid #e5e7eb",borderRadius:10,padding:"12px 16px",marginTop:10,
-                      display:"flex",alignItems:"flex-start",gap:10,
-                      boxShadow:"0 1px 4px rgba(0,0,0,.05)",animation:"fadeIn .2s ease"}}>
+                    <div key={item.id} style={{width:"100%",maxWidth:540,background:"#fff",border:`1.5px solid ${BRAND.gray200}`,borderRadius:8,padding:"11px 16px",marginTop:10,display:"flex",alignItems:"flex-start",gap:10,boxShadow:"0 1px 4px rgba(0,0,0,.05)",animation:"fadeIn .2s ease"}}>
                       <div style={{flex:1}}>
-                        <div style={{fontSize:14,fontWeight:600,color:"#0f172a",marginBottom:5}}>{item.text}</div>
+                        <div style={{fontSize:13,fontWeight:600,color:BRAND.navy,marginBottom:4}}>{item.text}</div>
                         <div style={{display:"flex",alignItems:"center",gap:6}}>
                           {fc&&<Av name={fc.author} size={16}/>}
-                          <span style={{fontSize:11,color:"#94a3b8"}}>
-                            from: {t.name.slice(0,40)}{t.name.length>40?"…":""} · 👍{t.votes}
-                          </span>
+                          <span style={{fontSize:11,color:BRAND.gray500}}>from: {t.name.slice(0,40)}{t.name.length>40?"…":""} · 👍{t.votes}</span>
                         </div>
                       </div>
-                      <button style={{background:"none",border:"none",cursor:"pointer",
-                        color:"#d1d5db",fontSize:18,padding:"0 4px",flexShrink:0,lineHeight:1}}
+                      <button style={{background:"none",border:"none",cursor:"pointer",color:BRAND.gray300,fontSize:17,padding:"0 4px",lineHeight:1}}
                         onClick={()=>removeAction(t.id,item.id)}
-                        onMouseEnter={e=>e.target.style.color="#ef4444"}
-                        onMouseLeave={e=>e.target.style.color="#d1d5db"}>×</button>
+                        onMouseEnter={e=>e.target.style.color=BRAND.danger}
+                        onMouseLeave={e=>e.target.style.color=BRAND.gray300}>×</button>
                     </div>
                   ))}
                 </div>
@@ -1216,31 +1091,25 @@ function Board({user,projectKey,retroId,onBack}){
             );
           })()}
 
-          {/* ── STEP 5: Summary ── */}
+          {/* ── STEP 5 ── */}
           {retro.step===5&&<Summary/>}
         </div>
 
         {/* Sidebar */}
         {retro.step<5&&(
-          <div style={{width:190,flexShrink:0,background:"#fff",
-            borderLeft:"1px solid #e5e7eb",padding:"18px 16px",overflowY:"auto"}}>
-            <div style={{fontSize:10,fontWeight:700,letterSpacing:"1.5px",
-              textTransform:"uppercase",color:"#94a3b8",marginBottom:14}}>Members Ready</div>
+          <div style={{width:190,flexShrink:0,background:"#fff",borderLeft:`1px solid ${BRAND.gray200}`,padding:"18px 16px",overflowY:"auto"}}>
+            <div style={{fontSize:10,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:BRAND.gray500,marginBottom:14}}>Members Ready</div>
             {knownPeople.map(name=>(
               <div key={name} style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
                 <div style={{position:"relative"}}>
                   <Av name={name} size={30}/>
                   {readyNames.includes(name)&&(
-                    <div style={{position:"absolute",bottom:-2,right:-2,width:12,height:12,
-                      borderRadius:"50%",background:"#22c55e",border:"2px solid #fff",
-                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:7}}>✓</div>
+                    <div style={{position:"absolute",bottom:-2,right:-2,width:12,height:12,borderRadius:"50%",background:BRAND.success,border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,color:"#fff"}}>✓</div>
                   )}
                 </div>
                 <div>
-                  <div style={{fontSize:12,fontWeight:600,color:"#0f172a"}}>
-                    {name}{name===user.name?" (you)":""}
-                  </div>
-                  <div style={{fontSize:10,color:readyNames.includes(name)?"#16a34a":"#94a3b8",fontWeight:600}}>
+                  <div style={{fontSize:12,fontWeight:600,color:BRAND.navy}}>{name}{name===user.name?" (you)":""}</div>
+                  <div style={{fontSize:10,color:readyNames.includes(name)?BRAND.success:BRAND.gray500,fontWeight:600}}>
                     {readyNames.includes(name)?"✓ Ready":"Thinking…"}
                   </div>
                 </div>
@@ -1265,26 +1134,17 @@ function App(){
   const proj=PROJECTS[selProject];
 
   const Topbar=()=>(
-    <div style={{background:"#fff",borderBottom:"1px solid #e5e7eb",height:52,
-      display:"flex",alignItems:"center",padding:"0 24px",gap:12,
-      boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <div style={{width:32,height:32,borderRadius:8,
-          background:"linear-gradient(135deg,#0ea5e9,#0d9488)",
-          display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🔁</div>
-        <span style={{fontSize:14,fontWeight:800,color:"#0f172a"}}>RetroForge</span>
-      </div>
+    <div style={{background:BRAND.navy,height:52,display:"flex",alignItems:"center",padding:"0 24px",gap:12}}>
+      <LexipolLogo size={32} white/>
       {selProject&&(
-        <span style={{background:proj.color+"18",color:proj.color,
-          border:`1px solid ${proj.color}33`,borderRadius:100,
-          padding:"2px 10px",fontSize:11,fontWeight:700}}>
-          {proj.emoji} {proj.name}
+        <span style={{background:"rgba(255,255,255,.1)",color:"rgba(255,255,255,.8)",border:"1px solid rgba(255,255,255,.15)",borderRadius:100,padding:"2px 10px",fontSize:11,fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:".5px"}}>
+          {proj.emoji} {proj.name.toUpperCase()}
         </span>
       )}
       <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
         <Av name={user.name} size={28}/>
-        <span style={{fontSize:13,fontWeight:600,color:"#374151"}}>{user.name}</span>
-        <button style={{...bGhost,padding:"5px 12px",fontSize:12}} onClick={()=>setUser(null)}>Logout</button>
+        <span style={{fontSize:12,fontWeight:600,color:"#fff"}}>{user.name}</span>
+        <button style={{...bGhost,padding:"5px 12px",fontSize:12,background:"rgba(255,255,255,.1)",color:"#fff",border:"1px solid rgba(255,255,255,.15)"}} onClick={()=>setUser(null)}>Logout</button>
       </div>
     </div>
   );
@@ -1296,14 +1156,10 @@ function App(){
   );
 
   return(
-    <div style={{minHeight:"100vh",background:"#f4f6f8"}}>
+    <div style={{minHeight:"100vh",background:BRAND.gray100}}>
       <Topbar/>
       {view==="dashboard"&&<Dashboard user={user} onSelect={k=>{setSelProject(k);setView("retrolist");}}/>}
-      {view==="retrolist"&&(
-        <RetroList user={user} projectKey={selProject}
-          onSelect={id=>{setSelRetro(id);setView("board");}}
-          onBack={()=>setView("dashboard")}/>
-      )}
+      {view==="retrolist"&&<RetroList user={user} projectKey={selProject} onSelect={id=>{setSelRetro(id);setView("board");}} onBack={()=>setView("dashboard")}/>}
     </div>
   );
 }

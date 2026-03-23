@@ -297,7 +297,7 @@ function RetroList({user,projectKey,onSelect,onBack}){
   async function create(){
     if(!form.name.trim())return;
     const r={id:uid(),project_key:projectKey,name:form.name.trim(),votes_per_person:parseInt(form.votes)||3,
-      step:1,columns:form.columns,groups:[],action_items:{},ready_status:{},user_votes:{},group_votes:{}};
+      step:0,columns:form.columns,groups:[],action_items:{},ready_status:{},user_votes:{},group_votes:{},prev_action_statuses:{}};
     const {error}=await sb.from("retros").insert(r);
     if(!error){setShowCreate(false);onSelect(r.id);}
     else alert("Error: "+error.message);
@@ -308,8 +308,8 @@ function RetroList({user,projectKey,onSelect,onBack}){
 
   if(loading)return <PageLoader msg="Loading retros..."/>;
 
-  const STEP_LABELS=["","Writing","Grouping","Voting","Action Items","Complete ✓"];
-  const STEP_COLORS=["",BRAND.gold,"#8b5cf6",BRAND.blue,BRAND.success,BRAND.success];
+  const STEP_LABELS=["Review","Writing","Grouping","Voting","Action Items","Complete ✓"];
+  const STEP_COLORS=[BRAND.blue,BRAND.gold,"#8b5cf6",BRAND.blue,BRAND.success,BRAND.success];
 
   return(
     <div style={{padding:"32px 28px",maxWidth:800,margin:"0 auto"}}>
@@ -395,6 +395,32 @@ function RetroList({user,projectKey,onSelect,onBack}){
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── ADD PREV ITEM FORM ───────────────────────────────────────────────────────
+function AddPrevItemForm({retro,saveRetro}){
+  const [draft,setDraft]=useState("");
+  async function add(){
+    const t=draft.trim();if(!t)return;
+    const item={id:uid(),text:t,topic:""};
+    const next=[...(retro.prev_action_items||[]),item];
+    await saveRetro({prev_action_items:next});
+    setDraft("");
+  }
+  return(
+    <div style={{background:"#f0f4f8",borderRadius:10,padding:"14px 16px",marginBottom:20,border:`1.5px solid ${BRAND.gray200}`}}>
+      <div style={{fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:BRAND.gray500,marginBottom:10}}>Add Action Item from Last Sprint</div>
+      <div style={{display:"flex",gap:8}}>
+        <input style={{...FI,marginBottom:0,flex:1}}
+          placeholder="e.g. Improve deployment pipeline documentation"
+          value={draft} onChange={e=>setDraft(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();add();}}}
+          onFocus={e=>e.target.style.borderColor=BRAND.blue}
+          onBlur={e=>e.target.style.borderColor=BRAND.gray200}/>
+        <button style={{...bPrimary,padding:"10px 18px",flexShrink:0}} onClick={add}>+ Add</button>
+      </div>
     </div>
   );
 }
@@ -549,10 +575,11 @@ function Board({user,projectKey,retroId,onBack}){
   }
   async function advance(){
     if(!retro||retro.step>=5)return;
+    if(retro.step===0){await saveRetro({step:1,ready_status:{}});return;}
     if(retro.step===1){await runGrouping();return;}
     await saveRetro({step:retro.step+1,ready_status:{}});
   }
-  async function goBack(){if(!retro||retro.step<=1)return;await saveRetro({step:retro.step-1,ready_status:{}});}
+  async function goBack(){if(!retro||retro.step<=0)return;await saveRetro({step:retro.step-1,ready_status:{}});}
 
   if(loading)return <PageLoader msg="Loading session..."/>;
   if(!retro)return <div style={{padding:40,color:BRAND.gray500}}>Session not found.</div>;
@@ -760,8 +787,8 @@ function Board({user,projectKey,retroId,onBack}){
         display:"flex",alignItems:"center",padding:"0 20px",gap:16,flexShrink:0,
         boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
         <div style={{display:"flex",alignItems:"center",gap:6,flex:1,flexWrap:"wrap"}}>
-          {["Write","Group","Vote","Actions"].map((label,i)=>{
-            const s=i+1;const active=retro.step===s;const done=retro.step>s;
+          {["Review","Write","Group","Vote","Actions"].map((label,i)=>{
+            const s=i;const active=retro.step===s;const done=retro.step>s;
             return(
               <div key={s} style={{display:"flex",alignItems:"center",gap:5}}>
                 {i>0&&<span style={{color:BRAND.gray300,fontSize:11}}>›</span>}
@@ -794,10 +821,13 @@ function Board({user,projectKey,retroId,onBack}){
               </div>
             </>
           )}
-          {retro.step>1&&retro.step<5&&user.role==="sm"&&(
+          {retro.step>0&&retro.step<5&&user.role==="sm"&&(
             <button style={{...bGhost,padding:"5px 12px",fontSize:12}} onClick={goBack}>‹ Back</button>
           )}
-          {retro.step<4&&user.role==="sm"&&(
+          {retro.step===0&&user.role==="sm"&&(
+            <button style={bPrimary} onClick={advance} disabled={saving}>Start Retro ›</button>
+          )}
+          {retro.step>0&&retro.step<4&&user.role==="sm"&&(
             <button style={bPrimary} onClick={advance} disabled={aiLoading||saving}>
               {aiLoading?<><Spin/> Working…</>:"Next ›"}
             </button>
@@ -811,6 +841,115 @@ function Board({user,projectKey,retroId,onBack}){
       {/* Main */}
       <div style={{flex:1,display:"flex",overflow:"hidden"}}>
         <div style={{flex:1,overflowX:"auto",overflowY:"auto"}}>
+
+          {/* ── STEP 0: Previous Action Items Review ── */}
+          {retro.step===0&&(()=>{
+            const prevStatuses=retro.prev_action_statuses||{};
+            // Gather all action items from previous retros — stored inline as prev_action_items on this retro
+            const prevItems=retro.prev_action_items||[];
+            const STATUS_OPTS=[
+              {key:"done",   label:"Done",        emoji:"✅", bg:"#dcfce7", color:BRAND.success, border:"#86efac"},
+              {key:"progress",label:"In Progress", emoji:"🔄", bg:"#fef3c7", color:"#92400e",    border:"#fcd34d"},
+              {key:"not_done",label:"Not Done",    emoji:"❌", bg:"#fee2e2", color:BRAND.danger,  border:"#fca5a5"},
+            ];
+            async function setStatus(itemId,status){
+              const next={...prevStatuses,[itemId]:status};
+              await saveRetro({prev_action_statuses:next});
+            }
+            const total=prevItems.length;
+            const counts={done:0,progress:0,not_done:0};
+            prevItems.forEach(it=>{const s=prevStatuses[it.id];if(s)counts[s]++;});
+            return(
+              <div style={{padding:"32px 28px",maxWidth:800,margin:"0 auto",overflowY:"auto",height:"calc(100vh - 160px)"}}>
+                {/* Header */}
+                <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:24}}>
+                  <div style={{width:52,height:52,borderRadius:12,background:BRAND.navy,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26}}>📋</div>
+                  <div>
+                    <div style={{fontSize:22,fontWeight:800,color:BRAND.navy,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:".5px"}}>PREVIOUS SPRINT ACTION ITEMS</div>
+                    <div style={{fontSize:13,color:BRAND.gray500,marginTop:2}}>Review what happened before starting the retro</div>
+                  </div>
+                </div>
+
+                {/* Stats */}
+                {total>0&&(
+                  <div style={{display:"flex",gap:10,marginBottom:24}}>
+                    {STATUS_OPTS.map(s=>(
+                      <div key={s.key} style={{flex:1,background:s.bg,borderRadius:10,padding:"14px 16px",textAlign:"center",border:`1.5px solid ${s.border}`}}>
+                        <div style={{fontSize:26,fontWeight:900,color:s.color,fontFamily:"'Barlow Condensed',sans-serif"}}>{counts[s.key]}</div>
+                        <div style={{fontSize:10,color:s.color,fontWeight:700,letterSpacing:"1px",marginTop:3,opacity:.85}}>{s.emoji} {s.label.toUpperCase()}</div>
+                      </div>
+                    ))}
+                    <div style={{flex:1,background:"#f0f4f8",borderRadius:10,padding:"14px 16px",textAlign:"center",border:`1.5px solid ${BRAND.gray200}`}}>
+                      <div style={{fontSize:26,fontWeight:900,color:BRAND.navy,fontFamily:"'Barlow Condensed',sans-serif"}}>{total}</div>
+                      <div style={{fontSize:10,color:BRAND.gray500,fontWeight:700,letterSpacing:"1px",marginTop:3}}>📌 TOTAL</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* SM: Add items form */}
+                {user.role==="sm"&&(
+                  <AddPrevItemForm retro={retro} saveRetro={saveRetro}/>
+                )}
+
+                {/* Items list */}
+                {total===0?(
+                  <div style={{background:"#fff",borderRadius:10,padding:36,textAlign:"center",border:`2px dashed ${BRAND.gray200}`}}>
+                    <div style={{fontSize:32,marginBottom:10}}>📭</div>
+                    <div style={{fontSize:14,color:BRAND.gray500,fontWeight:500}}>
+                      {user.role==="sm"?"No action items from last sprint. Add some above, or click \"Start Retro\" to continue.":"No action items from last sprint to review."}
+                    </div>
+                  </div>
+                ):(
+                  <div>
+                    <div style={{fontSize:11,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:BRAND.gray500,marginBottom:12}}>
+                      Action Items — {total} total
+                    </div>
+                    {prevItems.map((item,i)=>{
+                      const status=prevStatuses[item.id]||null;
+                      const opt=STATUS_OPTS.find(s=>s.key===status);
+                      return(
+                        <div key={item.id} style={{background:"#fff",border:`1.5px solid ${opt?opt.border:BRAND.gray200}`,borderRadius:10,padding:"14px 18px",marginBottom:10,display:"flex",alignItems:"flex-start",gap:14,boxShadow:"0 1px 4px rgba(0,0,0,.05)",animation:"fadeIn .2s ease",transition:"border-color .2s"}}>
+                          <div style={{background:BRAND.navy,color:"#fff",borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,flexShrink:0,marginTop:2}}>{i+1}</div>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:14,fontWeight:700,color:BRAND.navy,marginBottom:6,lineHeight:1.4}}>{item.text}</div>
+                            {item.topic&&<div style={{fontSize:11,color:BRAND.gray500,marginBottom:10}}>Topic: {item.topic}</div>}
+                            {/* Status buttons — SM only can change, participants see readonly */}
+                            <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                              {STATUS_OPTS.map(s=>{
+                                const active=status===s.key;
+                                return(
+                                  <button key={s.key}
+                                    disabled={user.role!=="sm"}
+                                    onClick={()=>user.role==="sm"&&setStatus(item.id,s.key)}
+                                    style={{padding:"5px 14px",borderRadius:100,fontSize:12,fontWeight:700,cursor:user.role==="sm"?"pointer":"default",
+                                      border:`1.5px solid ${active?s.border:BRAND.gray200}`,
+                                      background:active?s.bg:"#f8fafc",
+                                      color:active?s.color:BRAND.gray500,
+                                      transition:"all .15s",opacity:user.role!=="sm"&&!active?.5:1}}>
+                                    {s.emoji} {s.label}
+                                  </button>
+                                );
+                              })}
+                              {user.role==="sm"&&(
+                                <button onClick={async()=>{
+                                  const next=(retro.prev_action_items||[]).filter(x=>x.id!==item.id);
+                                  const ns={...prevStatuses};delete ns[item.id];
+                                  await saveRetro({prev_action_items:next,prev_action_statuses:ns});
+                                }} style={{padding:"5px 10px",borderRadius:100,fontSize:12,fontWeight:700,cursor:"pointer",
+                                  border:`1.5px solid #fca5a5`,background:"#fee2e2",color:BRAND.danger,transition:"all .15s",marginLeft:"auto"}}>
+                                  × Remove
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ── STEP 1 ── */}
           {retro.step===1&&(
@@ -1119,6 +1258,17 @@ function App(){
         </span>
       )}
       <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
+        {/* Health Dashboard tab — SM only */}
+        {user.role==="sm"&&selProject&&(
+          <button
+            onClick={()=>setView(view==="health"?"retrolist":"health")}
+            style={{...bGhost,padding:"5px 14px",fontSize:12,
+              background:view==="health"?BRAND.gold:"rgba(255,255,255,.1)",
+              color:view==="health"?BRAND.navy:"#fff",
+              border:view==="health"?`1px solid ${BRAND.gold}`:"1px solid rgba(255,255,255,.15)"}}>
+            📊 Health Dashboard
+          </button>
+        )}
         <Av name={user.name} size={28}/>
         <span style={{fontSize:12,fontWeight:600,color:"#fff"}}>{user.name}</span>
         <button style={{...bGhost,padding:"5px 12px",fontSize:12,background:"rgba(255,255,255,.1)",color:"#fff",border:"1px solid rgba(255,255,255,.15)"}} onClick={()=>setUser(null)}>Logout</button>
@@ -1137,6 +1287,194 @@ function App(){
       <Topbar/>
       {view==="dashboard"&&<Dashboard user={user} onSelect={k=>{setSelProject(k);setView("retrolist");}}/>}
       {view==="retrolist"&&<RetroList user={user} projectKey={selProject} onSelect={id=>{setSelRetro(id);setView("board");}} onBack={()=>setView("dashboard")}/>}
+      {view==="health"&&user.role==="sm"&&<HealthDashboard user={user} projectKey={selProject} onBack={()=>setView("retrolist")}/>}
+    </div>
+  );
+}
+
+// ─── HEALTH DASHBOARD ─────────────────────────────────────────────────────────
+function HealthDashboard({user,projectKey,onBack}){
+  const [retros,setRetros]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const proj=PROJECTS[projectKey];
+
+  useEffect(()=>{
+    async function load(){
+      setLoading(true);
+      const {data}=await sb.from("retros").select("*").eq("project_key",projectKey).order("created_at",{ascending:true});
+      setRetros((data||[]).filter(r=>r.step===5));
+      setLoading(false);
+    }
+    load();
+  },[projectKey]);
+
+  if(loading)return <PageLoader msg="Loading health data..."/>;
+
+  // Build per-sprint health metrics
+  const sprints=retros.map(r=>{
+    const ai=r.action_items||{};
+    const totalActions=Object.values(ai).reduce((s,a)=>s+a.length,0);
+    const statuses=r.prev_action_statuses||{};
+    const prevItems=r.prev_action_items||[];
+    const prevTotal=prevItems.length;
+    const prevDone=prevItems.filter(it=>statuses[it.id]==="done").length;
+    const prevProg=prevItems.filter(it=>statuses[it.id]==="progress").length;
+    const prevNot=prevItems.filter(it=>statuses[it.id]==="not_done").length;
+    const gv=r.group_votes||{};
+    const totalVotes=Object.values(gv).reduce((a,b)=>a+b,0);
+    const wentWell=Object.values(r.columns||[]).filter(c=>c.id==="went-well").length;
+    // Health score: % of prev action items done + participation proxy
+    const completionRate=prevTotal>0?Math.round((prevDone/prevTotal)*100):null;
+    return{id:r.id,name:r.name,date:r.created_at,totalActions,prevTotal,prevDone,prevProg,prevNot,completionRate,totalVotes};
+  });
+
+  const avg=arr=>arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length):0;
+  const withCompletion=sprints.filter(s=>s.completionRate!==null);
+  const avgCompletion=withCompletion.length?avg(withCompletion.map(s=>s.completionRate)):null;
+  const avgActions=avg(sprints.map(s=>s.totalActions));
+
+  const barMax=Math.max(...sprints.map(s=>s.totalActions),1);
+
+  return(
+    <div style={{padding:"32px 28px",maxWidth:960,margin:"0 auto",overflowY:"auto",minHeight:"calc(100vh - 52px)"}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:28}}>
+        <div>
+          <button style={{...bGhost,padding:"5px 12px",fontSize:12,marginBottom:12}} onClick={onBack}>← Back</button>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:52,height:52,borderRadius:12,background:BRAND.navy,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26}}>📊</div>
+            <div>
+              <div style={{fontSize:24,fontWeight:800,color:BRAND.navy,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:".5px"}}>TEAM HEALTH DASHBOARD</div>
+              <div style={{fontSize:13,color:BRAND.gray500,marginTop:2}}>{proj.emoji} {proj.name} · SM only view</div>
+            </div>
+          </div>
+        </div>
+        <div style={{background:BRAND.gold+"22",border:`1.5px solid ${BRAND.gold}`,borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:700,color:BRAND.navy,display:"flex",alignItems:"center",gap:6}}>
+          🔒 Scrum Master Eyes Only
+        </div>
+      </div>
+
+      {sprints.length===0?(
+        <div style={{background:"#fff",borderRadius:12,padding:48,textAlign:"center",border:`2px dashed ${BRAND.gray200}`}}>
+          <div style={{fontSize:36,marginBottom:12}}>📭</div>
+          <div style={{fontSize:15,color:BRAND.gray500,fontWeight:500}}>No completed sprints yet. Health data will appear here once retros are finished.</div>
+        </div>
+      ):(
+        <>
+          {/* Summary cards */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:28}}>
+            {[
+              {label:"Sprints Tracked",value:sprints.length,icon:"📅",color:BRAND.blue,bg:"#dbeafe"},
+              {label:"Avg Action Items",value:avgActions,icon:"✅",color:BRAND.success,bg:"#dcfce7"},
+              {label:"Avg Completion Rate",value:avgCompletion!==null?`${avgCompletion}%`:"—",icon:"🎯",color:"#7c3aed",bg:"#ede9fe"},
+              {label:"Latest Sprint",value:sprints[sprints.length-1]?.name?.split("·")[0]?.trim()||"—",icon:"🏁",color:BRAND.gold,bg:"#fef3c7",small:true},
+            ].map(s=>(
+              <div key={s.label} style={{background:s.bg,borderRadius:12,padding:"18px 20px"}}>
+                <div style={{fontSize:22,marginBottom:6}}>{s.icon}</div>
+                <div style={{fontSize:s.small?16:28,fontWeight:900,color:s.color,fontFamily:"'Barlow Condensed',sans-serif",lineHeight:1.1}}>{s.value}</div>
+                <div style={{fontSize:10,color:s.color,marginTop:5,fontWeight:700,letterSpacing:"1px",opacity:.8}}>{s.label.toUpperCase()}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Action items bar chart */}
+          <div style={{background:"#fff",borderRadius:12,padding:"24px 28px",marginBottom:20,boxShadow:"0 1px 4px rgba(0,0,0,.06)",border:`1px solid ${BRAND.gray200}`}}>
+            <div style={{fontSize:13,fontWeight:700,color:BRAND.navy,marginBottom:20,textTransform:"uppercase",letterSpacing:"1px"}}>📈 Action Items per Sprint</div>
+            <div style={{display:"flex",gap:12,alignItems:"flex-end",minHeight:120}}>
+              {sprints.map(s=>{
+                const h=Math.max(12,Math.round((s.totalActions/barMax)*100));
+                return(
+                  <div key={s.id} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+                    <div style={{fontSize:12,fontWeight:800,color:BRAND.blue}}>{s.totalActions}</div>
+                    <div style={{width:"100%",maxWidth:48,height:h,background:`linear-gradient(180deg,${BRAND.blue},${BRAND.blueLight})`,borderRadius:"5px 5px 0 0",transition:"height .3s",minHeight:12}}/>
+                    <div style={{fontSize:9,color:BRAND.gray500,textAlign:"center",fontWeight:600,maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name.split("·")[0].trim()}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Action item completion rate */}
+          {withCompletion.length>0&&(
+            <div style={{background:"#fff",borderRadius:12,padding:"24px 28px",marginBottom:20,boxShadow:"0 1px 4px rgba(0,0,0,.06)",border:`1px solid ${BRAND.gray200}`}}>
+              <div style={{fontSize:13,fontWeight:700,color:BRAND.navy,marginBottom:20,textTransform:"uppercase",letterSpacing:"1px"}}>🎯 Previous Action Item Completion</div>
+              {withCompletion.map(s=>(
+                <div key={s.id} style={{marginBottom:16}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                    <div style={{fontSize:13,fontWeight:600,color:BRAND.gray700}}>{s.name}</div>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      {[{label:"✅",v:s.prevDone,c:BRAND.success},{label:"🔄",v:s.prevProg,c:"#d97706"},{label:"❌",v:s.prevNot,c:BRAND.danger}].map(x=>(
+                        <span key={x.label} style={{fontSize:12,fontWeight:700,color:x.c}}>{x.label} {x.v}</span>
+                      ))}
+                      <span style={{fontSize:12,fontWeight:800,color:s.completionRate>=70?BRAND.success:s.completionRate>=40?"#d97706":BRAND.danger,
+                        background:s.completionRate>=70?"#dcfce7":s.completionRate>=40?"#fef3c7":"#fee2e2",
+                        borderRadius:100,padding:"2px 10px"}}>{s.completionRate}%</span>
+                    </div>
+                  </div>
+                  <div style={{height:10,borderRadius:10,background:BRAND.gray100,overflow:"hidden"}}>
+                    <div style={{height:"100%",borderRadius:10,width:`${s.completionRate}%`,
+                      background:s.completionRate>=70?BRAND.success:s.completionRate>=40?"#f59e0b":BRAND.danger,
+                      transition:"width .5s ease"}}/>
+                  </div>
+                  <div style={{display:"flex",gap:4,marginTop:5,flexWrap:"wrap"}}>
+                    {(retros.find(r=>r.id===s.id)?.prev_action_items||[]).map(item=>{
+                      const st=(retros.find(r=>r.id===s.id)?.prev_action_statuses||{})[item.id];
+                      const stopt=[
+                        {key:"done",emoji:"✅",c:BRAND.success,bg:"#dcfce7"},
+                        {key:"progress",emoji:"🔄",c:"#92400e",bg:"#fef3c7"},
+                        {key:"not_done",emoji:"❌",c:BRAND.danger,bg:"#fee2e2"},
+                      ].find(x=>x.key===st)||{emoji:"❓",c:BRAND.gray500,bg:BRAND.gray100};
+                      return(
+                        <span key={item.id} style={{fontSize:11,background:stopt.bg,color:stopt.c,borderRadius:6,padding:"2px 8px",fontWeight:600,border:`1px solid ${stopt.c}22`}}>
+                          {stopt.emoji} {item.text.slice(0,40)}{item.text.length>40?"…":""}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Sprint history table */}
+          <div style={{background:"#fff",borderRadius:12,padding:"24px 28px",boxShadow:"0 1px 4px rgba(0,0,0,.06)",border:`1px solid ${BRAND.gray200}`}}>
+            <div style={{fontSize:13,fontWeight:700,color:BRAND.navy,marginBottom:16,textTransform:"uppercase",letterSpacing:"1px"}}>🗂 Sprint History</div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead>
+                  <tr style={{borderBottom:`2px solid ${BRAND.gray200}`}}>
+                    {["Sprint","Date","Action Items","Prev Completed","Prev In Progress","Prev Not Done","Completion %"].map(h=>(
+                      <th key={h} style={{textAlign:"left",padding:"8px 12px",fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:BRAND.gray500}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...sprints].reverse().map((s,i)=>(
+                    <tr key={s.id} style={{borderBottom:`1px solid ${BRAND.gray100}`,background:i%2===0?"#f8fafc":"#fff"}}>
+                      <td style={{padding:"10px 12px",fontWeight:700,color:BRAND.navy}}>{s.name}</td>
+                      <td style={{padding:"10px 12px",color:BRAND.gray500}}>{new Date(s.date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</td>
+                      <td style={{padding:"10px 12px",fontWeight:800,color:BRAND.blue}}>{s.totalActions}</td>
+                      <td style={{padding:"10px 12px",fontWeight:700,color:BRAND.success}}>{s.prevDone}</td>
+                      <td style={{padding:"10px 12px",fontWeight:700,color:"#d97706"}}>{s.prevProg}</td>
+                      <td style={{padding:"10px 12px",fontWeight:700,color:BRAND.danger}}>{s.prevNot}</td>
+                      <td style={{padding:"10px 12px"}}>
+                        {s.completionRate!==null?(
+                          <span style={{fontWeight:800,
+                            color:s.completionRate>=70?BRAND.success:s.completionRate>=40?"#d97706":BRAND.danger,
+                            background:s.completionRate>=70?"#dcfce7":s.completionRate>=40?"#fef3c7":"#fee2e2",
+                            borderRadius:100,padding:"3px 12px"}}>
+                            {s.completionRate}%
+                          </span>
+                        ):<span style={{color:BRAND.gray300,fontSize:12}}>—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

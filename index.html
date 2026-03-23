@@ -156,41 +156,18 @@ function Auth({onLogin}){
 
   return(
     <div style={{minHeight:"100vh",display:"flex",background:BRAND.navy}}>
-      {/* Left panel — brand */}
-      <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"center",
-        padding:"60px 64px",background:`linear-gradient(135deg, ${BRAND.navy} 0%, #0d2d5e 100%)`,
-        borderRight:`1px solid rgba(255,255,255,.08)`,minWidth:0}}>
-        <LexipolLogo size={44} white/>
-        <div style={{marginTop:48}}>
-          <div style={{fontSize:42,fontWeight:900,color:"#fff",lineHeight:1.1,
-            fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:".5px"}}>
-            Sprint<br/>Retrospective<br/>
-            <span style={{color:BRAND.gold}}>Tool</span>
-          </div>
-          <div style={{fontSize:15,color:"rgba(255,255,255,.55)",marginTop:16,lineHeight:1.7,
-            fontWeight:400,maxWidth:320}}>
-            Empower your scrum teams with structured, real-time retrospectives — from across the Americas.
-          </div>
-        </div>
-        <div style={{marginTop:56,display:"flex",flexDirection:"column",gap:16}}>
-          {[
-            {icon:"🔁",label:"Real-time sync across all participants"},
-            {icon:"🤖",label:"AI-powered card grouping"},
-            {icon:"📊",label:"Voting, action items & session summary"},
-          ].map(f=>(
-            <div key={f.label} style={{display:"flex",alignItems:"center",gap:12}}>
-              <div style={{width:36,height:36,borderRadius:8,background:"rgba(245,166,35,.15)",
-                border:"1px solid rgba(245,166,35,.3)",display:"flex",alignItems:"center",
-                justifyContent:"center",fontSize:16,flexShrink:0}}>{f.icon}</div>
-              <div style={{fontSize:13,color:"rgba(255,255,255,.6)",fontWeight:500}}>{f.label}</div>
-            </div>
-          ))}
-        </div>
+      {/* Left panel — narrow brand strip */}
+      <div style={{width:220,flexShrink:0,display:"flex",flexDirection:"column",
+        justifyContent:"center",alignItems:"center",
+        padding:"40px 24px",
+        background:`linear-gradient(180deg, ${BRAND.navy} 0%, #0d2d5e 100%)`,
+        borderRight:`1px solid rgba(255,255,255,.08)`}}>
+        <LexipolLogo size={36} white/>
       </div>
 
-      {/* Right panel — form */}
-      <div style={{width:480,flexShrink:0,display:"flex",flexDirection:"column",
-        justifyContent:"center",padding:"48px 48px",background:"#fff",overflowY:"auto"}}>
+      {/* Right panel — form, takes all remaining space */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",
+        justifyContent:"center",padding:"48px 80px",background:"#fff",overflowY:"auto"}}>
         <div style={{marginBottom:32}}>
           <div style={{fontSize:24,fontWeight:800,color:BRAND.navy,marginBottom:6,
             fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:".5px"}}>
